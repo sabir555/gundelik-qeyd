@@ -786,7 +786,9 @@ details .col { margin-top: 12px; }
         return refresh(true);
       }
       st.className = "status err";
-      st.textContent = j && j.error === "bad_date" ? "Bu tarix üçün qeyd yazmaq olmur."
+      st.textContent = j && j.error === "bad_date" ? (S.date > todayKey()
+          ? "Server gələcək tarixi qəbul etmədi. Apps Script-də yeni kod yerləşdirilməyib (Deploy → Manage deployments → Edit → New version → Deploy)."
+          : "Bu tarix üçün qeyd yazmaq olmur.")
         : j && j.error === "already_written" ? "Bu tarix üçün qeyd artıq yazılıb. Düzəliş hüququnuz yoxdur."
         : j && j.error === "forbidden" ? "Bu əməliyyat üçün hüququnuz yoxdur."
         : j && j.error === "too_long" ? "Qeyd çox uzundur (2000 simvola qədər)."
