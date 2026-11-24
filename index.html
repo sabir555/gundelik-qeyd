@@ -750,7 +750,7 @@ details .col { margin-top: 12px; }
     var days = rangeDays();
     var wb = XLSX.utils.book_new();
 
-    // Hər gün ayrıca sheet (dd.mm.yyyy): № | tarix | Kurator. Hər işçinin adı alt-başlıq, sonra nömrələnmiş maddələr.
+    // Hər gün ayrıca sheet (dd.mm.yyyy): № | tarix | Kurator. Nömrələr gün boyu davam edir, Kurator sütununda yazan işçinin adı.
     var anyEntry = false;
     days.forEach(function (d) {
       var list = S.entries.filter(function (e) { return e.date === d; })
@@ -758,16 +758,17 @@ details .col { margin-top: 12px; }
       if (!list.length) return;
       anyEntry = true;
       var aoa = [["№", dotDate(d), "Kurator"]];
+      var n = 0;
       list.forEach(function (e) {
-        aoa.push(["", nameOf(e.username), ""]);
+        var who = nameOf(e.username);
         var items = String(e.text || "").split(/\r?\n/)
           .map(function (x) { return x.replace(/^\s*(?:\d+[.)]|[-•*])\s*/, "").trim(); })
           .filter(function (x) { return x; });
         if (!items.length) items = [""];
-        items.forEach(function (t, i) { aoa.push([i + 1, t, ""]); });
+        items.forEach(function (t) { n++; aoa.push([n, t, who]); });
       });
       var ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!cols"] = [{ wch: 5 }, { wch: 90 }, { wch: 18 }];
+      ws["!cols"] = [{ wch: 5 }, { wch: 90 }, { wch: 26 }];
       XLSX.utils.book_append_sheet(wb, ws, dotDate(d));
     });
     if (!anyEntry) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Seçilmiş müddətdə qeyd yoxdur."]]), "Qeyd yoxdur");
