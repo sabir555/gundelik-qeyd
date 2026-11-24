@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Gündəlik İş Qeydi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: one narrow column. Login first; employees write and edit their own days; the admin also gets a collected view. */
+:root {
+  --bg: #f3f5f6;
+  --surface: #ffffff;
+  --ink: #14212b;
+  --muted: #566772;
+  --line: #d9e0e4;
+  --accent: #0f6f66;
+  --accent-ink: #ffffff;
+  --accent-soft: #dff1ee;
+  --warn: #a8500a;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f171c;
+    --surface: #172229;
+    --ink: #e6eef2;
+    --muted: #93a5b0;
+    --line: #263540;
+    --accent: #4fc3b5;
+    --accent-ink: #06201d;
+    --accent-soft: #17332f;
+    --warn: #e0a15f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f171c;
+  --surface: #172229;
+  --ink: #e6eef2;
+  --muted: #93a5b0;
+  --line: #263540;
+  --accent: #4fc3b5;
+  --accent-ink: #06201d;
+  --accent-soft: #17332f;
+  --warn: #e0a15f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
+.col { display: flex; flex-direction: column; gap: 16px; }
+h1 { font-size: 22px; line-height: 1.25; margin: 0; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 16px; margin: 0; font-weight: 600; }
+.sub { color: var(--muted); font-size: 14px; margin: 2px 0 0; }
+.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tabs { display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.tab { flex: 1; font: inherit; font-weight: 500; padding: 9px 12px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.datebar { display: flex; align-items: center; gap: 8px; }
+.datebar .mid { flex: 1; min-width: 0; text-align: center; }
+.datebar .mid strong { display: block; font-weight: 600; }
+.datebar .mid span { color: var(--muted); font-size: 13px; }
+.iconbtn { font: inherit; width: 40px; height: 40px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; cursor: pointer; flex: none; }
+.iconbtn[disabled] { opacity: .45; cursor: default; }
+.btn { font: inherit; font-weight: 500; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.small { padding: 6px 12px; font-size: 14px; }
+.btn[disabled] { opacity: .55; cursor: default; }
+label { font-size: 14px; font-weight: 500; display: block; margin-bottom: 4px; }
+textarea, input[type="date"], input[type="text"], input[type="password"], select {
+  width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+}
+textarea { resize: vertical; min-height: 110px; }
+.field { display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.status { font-size: 14px; color: var(--muted); }
+.status.err { color: var(--warn); }
+.note { font-size: 14px; color: var(--warn); background: var(--surface); border: 1px dashed var(--warn); border-radius: 10px; padding: 10px 12px; }
+.feed { display: flex; flex-direction: column; gap: 10px; }
+.entry { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
+.entry .who { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+.entry .when { color: var(--muted); font-weight: 400; font-size: 13px; white-space: nowrap; }
+.entry .v { white-space: pre-wrap; overflow-wrap: anywhere; }
+.entry .actions { display: flex; justify-content: flex-end; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.chip.warn { color: var(--warn); border-color: var(--warn); }
+.chip.ok { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.empty { color: var(--muted); padding: 8px 0; }
+.dayhead { display: flex; flex-direction: column; }
+.dayhead strong { font-weight: 600; }
+.line { display: flex; flex-direction: column; padding-top: 6px; border-top: 1px solid var(--line); }
+.k2 { font-weight: 600; font-size: 14px; }
+.scroller { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 4px; text-align: center; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+th { font-weight: 500; color: var(--muted); white-space: nowrap; }
+th.today { color: var(--accent); font-weight: 600; }
+th.we, td.we { background: color-mix(in srgb, var(--line) 35%, transparent); }
+tr:last-child td { border-bottom: 0; }
+th.name, td.name { position: sticky; left: 0; background: var(--surface); text-align: left; padding-left: 12px; padding-right: 10px; min-width: 120px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 1; }
+td.cnt { color: var(--muted); padding: 6px 10px; white-space: nowrap; }
+.cell { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line); background: transparent; cursor: pointer; padding: 0; }
+.cell.on { background: var(--accent); border-color: var(--accent); }
+.cell:disabled { cursor: default; }
+details summary { cursor: pointer; font-weight: 500; }
+details .col { margin-top: 12px; }
+.report { margin-top: 8px; min-height: 160px; font-size: 13px; }
+.login { max-width: 380px; margin: 8vh auto 0; }
+@media (prefers-reduced-motion: no-preference) { .tab, .btn, .iconbtn { transition: background-color .12s; } }
+</style>
+</head>
+<body>
+
+<!-- Giriş -->
+<div class="wrap login" id="login" hidden>
+  <header>
+    <h1>Gündəlik iş qeydi</h1>
+    <p class="sub">İstifadəçi adı və parolla daxil olun.</p>
+  </header>
+  <div id="login-banner"></div>
+  <form class="card" id="login-form" autocomplete="on">
+    <div class="field">
+      <label for="l-user">İstifadəçi adı</label>
+      <input type="text" id="l-user" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="l-pass">Parol</label>
+      <input type="password" id="l-pass" name="password" autocomplete="current-password">
+    </div>
+    <div class="row">
+      <button class="btn primary" id="l-btn" type="submit">Daxil ol</button>
+      <span class="status" id="login-status" role="status"></span>
+    </div>
+  </form>
+</div>
+
+<!-- Əsas səhifə -->
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div>
+      <h1>Gündəlik iş qeydi</h1>
+      <p class="sub" id="who"></p>
+    </div>
+    <button class="btn small" id="logout" type="button">Çıxış</button>
+  </header>
+
+  <div id="banner"></div>
+
+  <div class="tabs" id="tabs" role="tablist" hidden>
+    <button class="tab" role="tab" id="tab-day" aria-selected="true" type="button">Gün</button>
+    <button class="tab" role="tab" id="tab-range" aria-selected="false" type="button">Toplu</button>
+  </div>
+
+  <section id="view-day" class="col">
+    <div class="card">
+      <div class="datebar">
+        <button class="iconbtn" id="prev" type="button" aria-label="Əvvəlki gün">&#8249;</button>
+        <div class="mid"><strong id="dlong"></strong><span id="dcount"></span></div>
+        <button class="iconbtn" id="next" type="button" aria-label="Sonrakı gün">&#8250;</button>
+      </div>
+      <input type="date" id="dpick" aria-label="Tarix seç">
+    </div>
+
+    <form class="card" id="form" autocomplete="off">
+      <h2>Mənim qeydim</h2>
+      <p class="sub" id="f-hint"></p>
+      <div class="field">
+        <label for="f-text">Bu gün nə etdim</label>
+        <textarea id="f-text" rows="5" maxlength="2000" placeholder="Məs: 1C-də 12 işçinin əmək haqqı hesablamasını yoxladım"></textarea>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="save" type="submit">Yadda saxla</button>
+        <span class="status" id="save-status" role="status"></span>
+      </div>
+    </form>
+
+    <!-- İşçi üçün: öz son qeydləri -->
+    <div class="card" id="my-recent" hidden>
+      <h2>Son qeydlərim</h2>
+      <div class="feed" id="my-feed"></div>
+    </div>
+
+    <!-- Admin üçün: seçilən günün hamı üzrə qeydləri -->
+    <div class="card" id="admin-day" hidden>
+      <h2 id="feed-title">Bu günün qeydləri</h2>
+      <div class="feed" id="feed"></div>
+      <div id="missing"></div>
+    </div>
+
+    <details class="card">
+      <summary>Parolu dəyiş</summary>
+      <div class="col">
+        <div class="field">
+          <label for="p-old">Köhnə parol</label>
+          <input type="password" id="p-old" autocomplete="current-password">
+        </div>
+        <div class="field">
+          <label for="p-new">Yeni parol (ən azı 6 simvol)</label>
+          <input type="password" id="p-new" autocomplete="new-password">
+        </div>
+        <div class="row">
+          <button class="btn" id="p-btn" type="button">Parolu dəyiş</button>
+          <span class="status" id="p-status" role="status"></span>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section id="view-range" class="col" hidden>
+    <div class="card">
+      <h2 id="tw-title">Bu gün yazıb</h2>
+      <div class="chips" id="today-wrote"></div>
+      <h2 id="tm-title">Bu gün yazmayıb</h2>
+      <div class="chips" id="today-missing"></div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2>Kim hansı gün yazıb</h2>
+        <div style="width:150px">
+          <select id="range" aria-label="Müddət">
+            <option value="7">Son 7 gün</option>
+            <option value="14">Son 14 gün</option>
+            <option value="30">Son 30 gün</option>
+          </select>
+        </div>
+      </div>
+      <div class="scroller"><table id="grid"></table></div>
+      <p class="sub">Dolu xanaya toxunsanız həmin günün qeydləri açılır.</p>
+    </div>
+    <div class="card">
+      <h2>Gündəlik siyahı</h2>
+      <div class="feed" id="daily"></div>
+    </div>
+    <div class="card">
+      <h2>Toplu hesabat</h2>
+      <div class="row">
+        <button class="btn primary" id="copy" type="button">Mətni kopyala</button>
+        <button class="btn" id="xlsx" type="button">Excel yüklə</button>
+        <span class="status" id="rep-status" role="status"></span>
+      </div>
+      <details>
+        <summary>Hesabata bax</summary>
+        <textarea class="report" id="report" readonly></textarea>
+      </details>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* Apps Script web app ünvanını bura yapışdırın (SETUP.md, 4-cü addım). */
+  var API_URL = "https://script.google.com/macros/s/AKfycbzktkbUwPVQKk5EUBYGAcqlRDB4ykQzhvrYMtQJA4wDtboWidcspm_xfz6Jbnr5NflFRg/exec";
+  var TOKEN_KEY = "gq_token";
+
+  var AZ_M = ["yanvar","fevral","mart","aprel","may","iyun","iyul","avqust","sentyabr","oktyabr","noyabr","dekabr"];
+  var AZ_D = ["Bazar","Bazar ertəsi","Çərşənbə axşamı","Çərşənbə","Cümə axşamı","Cümə","Şənbə"];
+
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function dkey(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function parse(k) { var p = k.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  function addDays(k, n) { var d = parse(k); d.setDate(d.getDate() + n); return dkey(d); }
+  function longDate(k) { var d = parse(k); return d.getDate() + " " + AZ_M[d.getMonth()] + " " + d.getFullYear(); }
+  function weekday(k) { return AZ_D[parse(k).getDay()]; }
+  function shortDate(k) { var d = parse(k); return pad(d.getDate()) + "." + pad(d.getMonth() + 1); }
+  function dotDate(k) { var d = parse(k); return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear(); }
+  function isWeekend(k) { var g = parse(k).getDay(); return g === 0 || g === 6; }
+  function todayKey() {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baku", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    } catch (e) { return dkey(new Date()); }
+  }
+  function timeOf(ts) {
+    var d = new Date(ts);
+    return isNaN(d.getTime()) ? "" : pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function el(tag, attrs) {
+    var e = document.createElement(tag);
+    var a = attrs || {};
+    Object.keys(a).forEach(function (k) {
+      var v = a[k];
+      if (k === "class") e.className = v;
+      else if (k === "text") e.textContent = v;
+      else if (k.indexOf("on") === 0) e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v);
+    });
+    for (var i = 2; i < arguments.length; i++) {
+      var c = arguments[i];
+      if (c == null) continue;
+      (Array.isArray(c) ? c : [c]).forEach(function (x) {
+        if (x != null) e.append(x.nodeType ? x : document.createTextNode(String(x)));
+      });
+    }
+    return e;
+  }
+  function $(id) { return document.getElementById(id); }
+
+  function getToken() { try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+  function setToken(t) {
+    try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ }
+  }
+
+  var S = {
+    token: null, me: null,
+    entries: [], users: [], names: {},
+    date: null, tab: "day", range: 7,
+    dirty: false, formDate: null, saving: false, loaded: false, confirming: false
+  };
+  var idx = {};
+
+  function canView() { return !!S.me && !!S.me.rights && !!S.me.rights.view; }
+  function myRights() { return (S.me && S.me.rights) || {}; }
+  function entryOf(u, d) { return idx[d + "|" + u] || null; }
+  function nameOf(u) { return S.names[u] || u; }
+
+  function setData(j) {
+    S.entries = j.entries || [];
+    S.users = j.users || [];
+    idx = {};
+    S.names = {};
+    S.users.forEach(function (u) { S.names[u.username] = u.name; });
+    S.entries.forEach(function (e) {
+      idx[e.date + "|" + e.username] = e;
+      if (!S.names[e.username]) S.names[e.username] = e.name;
+    });
+  }
+
+  function banner(text) {
+    var b = $("banner");
+    b.replaceChildren();
+    if (text) b.append(el("div", { class: "note", text: text }));
+  }
+
+  /* ---------- API ---------- */
+  function api(action, data) {
+    var body = Object.assign({ action: action, token: S.token }, data || {});
+    return fetch(API_URL, { method: "POST", body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j && j.error === "auth" && action !== "login") logout("Giriş müddəti bitib. Yenidən daxil olun.");
+        return j;
+      });
+  }
+
+  /* ---------- Login ---------- */
+  function showLogin(msg) {
+    $("app").hidden = true;
+    $("login").hidden = false;
+    var b = $("login-banner");
+    b.replaceChildren();
+    if (msg) b.append(el("div", { class: "note", text: msg }));
+  }
+
+  function logout(msg) {
+    S.token = null; S.me = null; S.entries = []; S.users = []; idx = {};
+    setToken(null);
+    $("l-pass").value = "";
+    showLogin(msg);
+  }
+
+  function onLogin(ev) {
+    ev.preventDefault();
+    var st = $("login-status");
+    var user = $("l-user").value.trim();
+    var pw = $("l-pass").value;
+    if (!user || !pw) { st.className = "status err"; st.textContent = "İstifadəçi adı və parolu yazın."; return; }
+    st.className = "status";
+    st.textContent = "Yoxlanılır…";
+    $("l-btn").disabled = true;
+    api("login", { username: user, password: pw }).then(function (j) {
+      if (j && j.ok) {
+        S.token = j.token; S.me = j.me;
+        setToken(j.token);
+        st.textContent = "";
+        $("l-pass").value = "";
+        enterApp();
+      } else {
+        st.className = "status err";
+        st.textContent = j && j.error === "locked"
+          ? "Çox səhv cəhd olub. 10 dəqiqə sonra yenidən yoxlayın."
+          : j && j.error === "bad_login" ? "İstifadəçi adı və ya parol səhvdir." : "Giriş alınmadı. Bir az sonra yenidən yoxlayın.";
+      }
+    }).catch(function () {
+      st.className = "status err";
+      st.textContent = "Serverə qoşulmaq alınmadı. İnterneti yoxlayın.";
+    }).then(function () { $("l-btn").disabled = false; });
+  }
+
+  function enterApp() {
+    $("login").hidden = true;
+    $("app").hidden = false;
+    $("who").textContent = S.me.name;
+    $("tabs").hidden = !canView();
+    $("admin-day").hidden = !canView();
+    $("my-recent").hidden = canView();
+    S.date = todayKey();
+    S.dirty = false; S.formDate = null; S.loaded = false;
+    switchTab("day");
+  }
+
+  /* ---------- Data loading ---------- */
+  function rangeFrom() { return addDays(todayKey(), -(S.range - 1)); }
+
+  function load() {
+    var from, to;
+    if (S.tab === "range") { from = rangeFrom(); to = todayKey(); }
+    else if (canView()) { from = S.date; to = S.date; }
+    else { from = addDays(todayKey(), -29); to = todayKey(); }
+    return api("list", { from: from, to: to }).then(function (j) {
+      if (j && j.ok) setData(j);
+      else if (!j || j.error !== "auth") throw new Error("list");
+    });
+  }
+
+  function refresh(quiet) {
+    if (!S.me) return Promise.resolve();
+    if (!quiet) { S.loaded = false; render(); }
+    return load().then(function () {
+      S.loaded = true;
+      banner("");
+      if (!(S.dirty && S.formDate === S.date)) fillForm();
+      render();
+    }).catch(function () {
+      banner("Məlumatı yükləmək alınmadı. İnterneti yoxlayıb yenidən cəhd edin.");
+      S.loaded = true;
+      render();
+    });
+  }
+
+  /* ---------- Gün bölməsi ---------- */
+  function fillForm() {
+    var e = S.me ? entryOf(S.me.username, S.date) : null;
+    $("f-text").value = e ? e.text : "";
+    S.formDate = S.date;
+    S.dirty = false;
+  }
+
+  function entryCard(e, withActions) {
+    var card = el("div", { class: "entry" },
+      el("div", { class: "who" }, el("span", { text: withActions ? longDate(e.date) + ", " + weekday(e.date) : nameOf(e.username) }), el("span", { class: "when", text: timeOf(e.ts) })),
+      el("div", { class: "v", text: e.text })
+    );
+    if (withActions && myRights().edit) {
+      card.append(el("div", { class: "actions" }, el("button", {
+        class: "btn small", type: "button", text: "Redaktə et",
+        onclick: function () { setDate(e.date); $("form").scrollIntoView({ behavior: "smooth", block: "start" }); }
+      })));
+    }
+    return card;
+  }
+
+  function renderDay() {
+    var today = todayKey();
+    $("dlong").textContent = longDate(S.date);
+    $("dpick").value = S.date;
+    $("dpick").max = today;
+    $("dpick").min = addDays(today, -29);
+    $("prev").disabled = S.date <= addDays(today, -29);
+    $("next").disabled = S.date >= today;
+
+    var rights = myRights();
+    var mine = S.me ? entryOf(S.me.username, S.date) : null;
+    var editable = mine ? !!rights.edit : !!rights.write;
+    var hint = "";
+    if (S.loaded) {
+      if (mine) hint = rights.edit
+        ? "Bu tarix üçün qeydiniz var. Dəyişib yenidən saxlaya bilərsiniz."
+        : "Bu tarix üçün qeydinizi yazmısınız. Gündə yalnız bir dəfə yazmaq olur və düzəliş hüququnuz yoxdur.";
+      else if (!rights.write) hint = "Bu tarix üçün yazmaq hüququnuz yoxdur.";
+      else hint = rights.edit
+        ? (S.date === today ? "Bu gün üçün hələ qeyd yazmamısınız." : "Bu tarix üçün qeyd yoxdur. İstəsəniz əlavə edə bilərsiniz.")
+        : "Gündə yalnız bir dəfə yazmaq olur. Saxladıqdan sonra dəyişmək olmayacaq.";
+    }
+    $("form").hidden = !(rights.write || rights.edit);
+    $("f-text").readOnly = !editable;
+    $("save").hidden = !editable;
+    $("f-hint").textContent = hint;
+    $("save").textContent = S.confirming ? "Bəli, göndər" : (mine ? "Yenilə" : "Yadda saxla");
+
+    if (canView()) {
+      var wrote = S.entries.filter(function (e) { return e.date === S.date; });
+      var roster = S.users.length;
+      $("dcount").textContent = weekday(S.date) + (S.loaded ? " · " + wrote.length + " nəfər yazıb" : "");
+      $("feed-title").textContent = S.date === today ? "Bu gün komanda nə edib" : dotDate(S.date) + " tarixli qeydlər";
+      var feed = $("feed");
+      feed.replaceChildren();
+      if (!S.loaded) feed.append(el("div", { class: "empty", text: "Yüklənir…" }));
+      else if (!wrote.length) feed.append(el("div", { class: "empty", text: "Bu tarixdə hələ qeyd yoxdur." }));
+      else {
+        wrote.sort(function (a, b) { return nameOf(a.username).localeCompare(nameOf(b.username)); });
+        wrote.forEach(function (e) { feed.append(entryCard(e, false)); });
+      }
+      var miss = $("missing");
+      miss.replaceChildren();
+      if (S.loaded && roster) {
+        var none = missingOn(S.date);
+        if (none.length) {
+          miss.append(el("p", { class: "sub", text: "Bu tarixdə yazmayanlar (" + none.length + ")" }),
+            el("div", { class: "chips" }, none.map(function (u) { return el("span", { class: "chip warn", text: u.name }); })));
+        }
+      }
+    } else {
+      $("dcount").textContent = weekday(S.date);
+      var mf = $("my-feed");
+      mf.replaceChildren();
+      var mineAll = S.entries.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+      if (!S.loaded) mf.append(el("div", { class: "empty", text: "Yüklənir…" }));
+      else if (!mineAll.length) mf.append(el("div", { class: "empty", text: "Hələ qeydiniz yoxdur." }));
+      else mineAll.forEach(function (e) { mf.append(entryCard(e, true)); });
+    }
+  }
+
+  function setDate(k) {
+    var today = todayKey();
+    if (!k || k > today || k < addDays(today, -29)) return;
+    S.date = k;
+    S.dirty = false;
+    S.confirming = false;
+    $("save-status").textContent = "";
+    if (S.tab !== "day") { switchTab("day"); return; }
+    if (canView()) { $("f-text").value = ""; S.formDate = null; refresh(); }
+    else { fillForm(); renderDay(); }
+  }
+
+  function onSave(ev) {
+    ev.preventDefault();
+    var st = $("save-status");
+    var text = $("f-text").value.trim();
+    if (!text) { st.className = "status err"; st.textContent = "Bu gün nə etdiyinizi yazın."; return; }
+    if (S.saving) return;
+    var existing = S.me ? entryOf(S.me.username, S.date) : null;
+    if (!existing && !myRights().edit && !S.confirming) {
+      S.confirming = true;
+      $("save").textContent = "Bəli, göndər";
+      st.className = "status";
+      st.textContent = "Bu gün üçün qeyd bir dəfə yazılır və sonra dəyişdirilmir. Əminsinizsə, təsdiqləyin.";
+      return;
+    }
+    S.saving = true;
+    $("save").disabled = true;
+    st.className = "status";
+    st.textContent = "Saxlanılır…";
+    api("save", { date: S.date, text: text }).then(function (j) {
+      if (j && j.ok) {
+        S.dirty = false;
+        st.textContent = "Yadda saxlanıldı.";
+        return refresh(true);
+      }
+      st.className = "status err";
+      st.textContent = j && j.error === "bad_date" ? "Bu tarix üçün qeyd yazmaq olmur."
+        : j && j.error === "already_written" ? "Bu tarix üçün qeyd artıq yazılıb. Düzəliş hüququnuz yoxdur."
+        : j && j.error === "forbidden" ? "Bu əməliyyat üçün hüququnuz yoxdur."
+        : j && j.error === "too_long" ? "Qeyd çox uzundur (2000 simvola qədər)."
+        : "Saxlamaq alınmadı. Bir az sonra yenidən yoxlayın.";
+    }).catch(function () {
+      st.className = "status err";
+      st.textContent = "Serverə qoşulmaq alınmadı. Yazdığınız mətn yerindədir, yenidən saxlayın.";
+    }).then(function () {
+      S.saving = false;
+      S.confirming = false;
+      $("save").disabled = false;
+      render();
+    });
+  }
+
+  function onPasswd() {
+    var st = $("p-status");
+    var o = $("p-old").value, n = $("p-new").value;
+    if (!o || n.length < 6) { st.className = "status err"; st.textContent = "Köhnə parolu yazın, yeni parol ən azı 6 simvol olsun."; return; }
+    st.className = "status";
+    st.textContent = "Yoxlanılır…";
+    api("passwd", { oldPassword: o, newPassword: n }).then(function (j) {
+      if (j && j.ok) { $("p-old").value = ""; $("p-new").value = ""; st.textContent = "Parol dəyişdirildi."; }
+      else {
+        st.className = "status err";
+        st.textContent = j && j.error === "bad_login" ? "Köhnə parol səhvdir." : j && j.error === "short_password" ? "Yeni parol çox qısadır." : "Alınmadı.";
+      }
+    }).catch(function () { st.className = "status err"; st.textContent = "Serverə qoşulmaq alınmadı."; });
+  }
+
+  /* ---------- Toplu bölmə (admin) ---------- */
+  function rangeDays() {
+    var out = [];
+    var t = todayKey();
+    for (var i = S.range - 1; i >= 0; i--) out.push(addDays(t, -i));
+    return out;
+  }
+
+  function missingOn(d) {
+    if (isWeekend(d)) return [];
+    return S.users.filter(function (u) { return (!u.since || u.since <= d) && !entryOf(u.username, d); });
+  }
+
+  function writersInRange(days) {
+    var seen = {};
+    S.entries.forEach(function (e) { seen[e.username] = true; });
+    return Object.keys(seen).filter(function (u) {
+      return days.some(function (d) { return entryOf(u, d); });
+    }).sort(function (a, b) { return nameOf(a).localeCompare(nameOf(b)); });
+  }
+
+  function renderToday() {
+    var t = todayKey();
+    var wbox = $("today-wrote"), mbox = $("today-missing");
+    wbox.replaceChildren();
+    mbox.replaceChildren();
+    if (!S.loaded) { wbox.append(el("span", { class: "sub", text: "Yüklənir…" })); return; }
+    var wrote = S.entries.filter(function (e) { return e.date === t; });
+    $("tw-title").textContent = "Bu gün yazıb" + (wrote.length ? " (" + wrote.length + ")" : "");
+    if (!wrote.length) wbox.append(el("span", { class: "sub", text: "Hələ heç kim yazmayıb." }));
+    wrote.forEach(function (e) { wbox.append(el("span", { class: "chip ok", text: nameOf(e.username) })); });
+    $("tm-title").textContent = "Bu gün yazmayıb";
+    if (isWeekend(t)) { mbox.append(el("span", { class: "sub", text: "Bu gün istirahət günüdür." })); return; }
+    if (!S.users.length) { mbox.append(el("span", { class: "sub", text: "İşçi siyahısı boşdur. Users vərəqinə işçi əlavə edin." })); return; }
+    var m = missingOn(t);
+    if (!m.length) { mbox.append(el("span", { class: "sub", text: "Hamı yazıb." })); return; }
+    $("tm-title").textContent = "Bu gün yazmayıb (" + m.length + ")";
+    m.forEach(function (u) { mbox.append(el("span", { class: "chip warn", text: u.name })); });
+  }
+
+  function renderGrid() {
+    var days = rangeDays();
+    var people = writersInRange(days);
+    var g = $("grid");
+    g.replaceChildren();
+    var thead = el("tr", {}, el("th", { class: "name", text: "İşçi" }));
+    days.forEach(function (d) {
+      var cls = (d === todayKey() ? "today " : "") + (isWeekend(d) ? "we" : "");
+      thead.append(el("th", { class: cls.trim(), title: weekday(d), text: shortDate(d) }));
+    });
+    thead.append(el("th", { text: "Cəmi" }));
+    g.append(el("thead", {}, thead));
+    var tb = el("tbody");
+    if (!people.length) {
+      tb.append(el("tr", {}, el("td", { colspan: String(days.length + 2), class: "empty", text: S.loaded ? "Seçilmiş müddətdə qeyd yoxdur." : "Yüklənir…" })));
+    }
+    people.forEach(function (u) {
+      var tr = el("tr", {}, el("td", { class: "name", text: nameOf(u), title: nameOf(u) }));
+      var n = 0;
+      days.forEach(function (d) {
+        var has = !!entryOf(u, d);
+        if (has) n++;
+        var btn = el("button", { class: "cell" + (has ? " on" : ""), type: "button", "aria-label": nameOf(u) + ", " + dotDate(d) + (has ? ": yazıb" : ": yazmayıb") });
+        if (has) btn.addEventListener("click", function () { setDate(d); });
+        else btn.disabled = true;
+        tr.append(el("td", { class: isWeekend(d) ? "we" : "" }, btn));
+      });
+      tr.append(el("td", { class: "cnt", text: n + "/" + days.length }));
+      tb.append(tr);
+    });
+    g.append(tb);
+  }
+
+  function renderDaily() {
+    var box = $("daily");
+    box.replaceChildren();
+    var any = false;
+    rangeDays().reverse().forEach(function (d) {
+      var wrote = S.entries.filter(function (e) { return e.date === d; })
+        .sort(function (a, b) { return nameOf(a.username).localeCompare(nameOf(b.username)); });
+      if (!wrote.length) return;
+      any = true;
+      var sec = el("div", { class: "entry" },
+        el("div", { class: "dayhead" }, el("strong", { text: longDate(d) + ", " + weekday(d) }), el("span", { class: "sub", text: wrote.length + " nəfər yazıb" })));
+      wrote.forEach(function (e) {
+        sec.append(el("div", { class: "line" }, el("span", { class: "k2", text: nameOf(e.username) }), el("span", { class: "v", text: e.text })));
+      });
+      box.append(sec);
+    });
+    if (!any) box.append(el("div", { class: "empty", text: S.loaded ? "Seçilmiş müddətdə qeyd yoxdur." : "Yüklənir…" }));
+  }
+
+  function collectRows() {
+    var rows = [];
+    rangeDays().reverse().forEach(function (d) {
+      S.entries.filter(function (e) { return e.date === d; })
+        .sort(function (a, b) { return nameOf(a.username).localeCompare(nameOf(b.username)); })
+        .forEach(function (e) { rows.push({ date: d, name: nameOf(e.username), text: e.text }); });
+    });
+    return rows;
+  }
+
+  function buildReport() {
+    var days = rangeDays();
+    var rows = collectRows();
+    var lines = ["Gündəlik iş hesabatı: " + dotDate(days[0]) + " – " + dotDate(days[days.length - 1]), ""];
+    if (!rows.length) lines.push("Seçilmiş müddətdə qeyd yoxdur.");
+    var cur = "";
+    rows.forEach(function (r) {
+      if (r.date !== cur) { cur = r.date; lines.push(longDate(cur) + ", " + weekday(cur)); }
+      lines.push("- " + r.name + ": " + r.text);
+    });
+    var absent = [];
+    days.slice().reverse().forEach(function (d) {
+      var m = missingOn(d);
+      if (m.length) absent.push(dotDate(d) + ": " + m.map(function (u) { return u.name; }).join(", "));
+    });
+    if (absent.length) {
+      lines.push("", "Yazmayanlar:");
+      absent.forEach(function (a) { lines.push("- " + a); });
+    }
+    return lines.join("\n");
+  }
+
+  function renderRange() {
+    renderToday();
+    renderGrid();
+    renderDaily();
+    $("report").value = buildReport();
+  }
+
+  function copyReport() {
+    var st = $("rep-status");
+    st.className = "status";
+    var done = function () { st.textContent = "Kopyalandı."; };
+    var fail = function () {
+      document.querySelector("#view-range details").open = true;
+      $("report").focus();
+      $("report").select();
+      st.textContent = "Mətni seçib özünüz kopyalayın.";
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText($("report").value).then(done, fail);
+    else fail();
+  }
+
+  function downloadXlsx() {
+    var st = $("rep-status");
+    st.className = "status";
+    if (!window.XLSX) { st.className = "status err"; st.textContent = "Excel kitabxanası yüklənmədi. Səhifəni yeniləyin."; return; }
+    var days = rangeDays();
+    var wb = XLSX.utils.book_new();
+
+    // Hər gün üçün blok: yuxarıda tarix, altında kim nə yazıb, sağda istifadəçi adı.
+    var aoa = [["Gündəlik iş hesabatı: " + dotDate(days[0]) + " – " + dotDate(days[days.length - 1])], []];
+    var merges = [];
+    var anyEntry = false;
+    days.slice().reverse().forEach(function (d) {
+      var list = S.entries.filter(function (e) { return e.date === d; })
+        .sort(function (a, b) { return nameOf(a.username).localeCompare(nameOf(b.username)); });
+      if (!list.length) return;
+      anyEntry = true;
+      merges.push({ s: { r: aoa.length, c: 0 }, e: { r: aoa.length, c: 2 } });
+      aoa.push([dotDate(d) + ", " + weekday(d)]);
+      aoa.push(["İşçi", "Nə yazıb", "İstifadəçi adı"]);
+      list.forEach(function (e) { aoa.push([nameOf(e.username), e.text, e.username]); });
+      aoa.push([]);
+    });
+    if (!anyEntry) aoa.push(["Seçilmiş müddətdə qeyd yoxdur."]);
+    var ws1 = XLSX.utils.aoa_to_sheet(aoa);
+    ws1["!merges"] = merges;
+    ws1["!cols"] = [{ wch: 28 }, { wch: 90 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, ws1, "Qeydlər");
+
+    var grid = [["İşçi"].concat(days.map(function (d) { return shortDate(d); }), ["Cəmi"])];
+    writersInRange(days).forEach(function (u) {
+      var n = 0;
+      var line = [nameOf(u)];
+      days.forEach(function (d) { var h = !!entryOf(u, d); if (h) n++; line.push(h ? "+" : ""); });
+      line.push(n);
+      grid.push(line);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(grid), "Cədvəl");
+
+    var abs = [["Tarix", "İşçi"]];
+    days.slice().reverse().forEach(function (d) {
+      missingOn(d).forEach(function (u) { abs.push([dotDate(d), u.name]); });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abs), "Yazmayanlar");
+
+    try {
+      XLSX.writeFile(wb, "gundelik-is-" + todayKey() + ".xlsx");
+      st.textContent = "Excel faylı hazırlandı.";
+    } catch (e) {
+      st.className = "status err";
+      st.textContent = "Fayl yaradıla bilmədi.";
+    }
+  }
+
+  /* ---------- Tablar və render ---------- */
+  function switchTab(t) {
+    S.tab = t;
+    $("tab-day").setAttribute("aria-selected", String(t === "day"));
+    $("tab-range").setAttribute("aria-selected", String(t === "range"));
+    $("view-day").hidden = t !== "day";
+    $("view-range").hidden = t !== "range";
+    refresh();
+  }
+
+  function render() {
+    if (!S.me) return;
+    if (S.tab === "day") renderDay(); else renderRange();
+  }
+
+  /* ---------- Başlanğıc ---------- */
+  function boot() {
+    $("login-form").addEventListener("submit", onLogin);
+    $("logout").addEventListener("click", function () { logout(); });
+    $("tab-day").addEventListener("click", function () { if (S.tab !== "day") switchTab("day"); });
+    $("tab-range").addEventListener("click", function () { if (S.tab !== "range") switchTab("range"); });
+    $("prev").addEventListener("click", function () { setDate(addDays(S.date, -1)); });
+    $("next").addEventListener("click", function () { setDate(addDays(S.date, 1)); });
+    $("dpick").addEventListener("change", function (e) { setDate(e.target.value); });
+    $("form").addEventListener("submit", onSave);
+    $("f-text").addEventListener("input", function () { S.dirty = true; S.confirming = false; $("save").textContent = "Yadda saxla"; $("save-status").textContent = ""; });
+    $("p-btn").addEventListener("click", onPasswd);
+    $("range").addEventListener("change", function (e) { S.range = Number(e.target.value); refresh(); });
+    $("copy").addEventListener("click", copyReport);
+    $("xlsx").addEventListener("click", downloadXlsx);
+
+    // Admin üçün siyahı hər dəqiqə yenilənir (səhifə açıq və görünəndə).
+    setInterval(function () {
+      if (S.me && canView() && !document.hidden && !S.saving && !S.dirty) refresh(true);
+    }, 60000);
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && S.me && !S.saving && !S.dirty) refresh(true);
+    });
+
+    if (API_URL.indexOf("PASTE_") === 0) {
+      showLogin("Səhifə hələ qurulmayıb: index.html faylında API_URL dəyəri yazılmalıdır.");
+      return;
+    }
+    var t = getToken();
+    if (!t) { showLogin(); return; }
+    S.token = t;
+    api("me").then(function (j) {
+      if (j && j.ok) { S.me = j.me; enterApp(); }
+      else showLogin();
+    }).catch(function () { showLogin("Serverə qoşulmaq alınmadı. Səhifəni yeniləyin."); });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
