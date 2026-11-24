@@ -750,26 +750,27 @@ details .col { margin-top: 12px; }
     var days = rangeDays();
     var wb = XLSX.utils.book_new();
 
-    // Hər gün üçün blok: yuxarıda tarix, altında kim nə yazıb, sağda istifadəçi adı.
-    var aoa = [["Gündəlik iş hesabatı: " + dotDate(days[0]) + " – " + dotDate(days[days.length - 1])], []];
-    var merges = [];
+    // Hər gün ayrıca sheet (dd.mm.yyyy): № | tarix | Kurator. Hər işçinin adı alt-başlıq, sonra nömrələnmiş maddələr.
     var anyEntry = false;
-    days.slice().reverse().forEach(function (d) {
+    days.forEach(function (d) {
       var list = S.entries.filter(function (e) { return e.date === d; })
         .sort(function (a, b) { return nameOf(a.username).localeCompare(nameOf(b.username)); });
       if (!list.length) return;
       anyEntry = true;
-      merges.push({ s: { r: aoa.length, c: 0 }, e: { r: aoa.length, c: 2 } });
-      aoa.push([dotDate(d) + ", " + weekday(d)]);
-      aoa.push(["İşçi", "Nə yazıb", "İstifadəçi adı"]);
-      list.forEach(function (e) { aoa.push([nameOf(e.username), e.text, e.username]); });
-      aoa.push([]);
+      var aoa = [["№", dotDate(d), "Kurator"]];
+      list.forEach(function (e) {
+        aoa.push(["", nameOf(e.username), ""]);
+        var items = String(e.text || "").split(/\r?\n/)
+          .map(function (x) { return x.replace(/^\s*(?:\d+[.)]|[-•*])\s*/, "").trim(); })
+          .filter(function (x) { return x; });
+        if (!items.length) items = [""];
+        items.forEach(function (t, i) { aoa.push([i + 1, t, ""]); });
+      });
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 5 }, { wch: 90 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, ws, dotDate(d));
     });
-    if (!anyEntry) aoa.push(["Seçilmiş müddətdə qeyd yoxdur."]);
-    var ws1 = XLSX.utils.aoa_to_sheet(aoa);
-    ws1["!merges"] = merges;
-    ws1["!cols"] = [{ wch: 28 }, { wch: 90 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, ws1, "Qeydlər");
+    if (!anyEntry) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Seçilmiş müddətdə qeyd yoxdur."]]), "Qeyd yoxdur");
 
     var grid = [["İşçi"].concat(days.map(function (d) { return shortDate(d); }), ["Cəmi"])];
     writersInRange(days).forEach(function (u) {
