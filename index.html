@@ -88,6 +88,15 @@ textarea, input[type="date"], input[type="text"], input[type="password"], select
 }
 textarea { resize: vertical; min-height: 110px; }
 .field { display: flex; flex-direction: column; }
+.pwwrap { position: relative; }
+.pwwrap input { padding-right: 46px; }
+.eye { position: absolute; right: 2px; top: 0; bottom: 0; width: 42px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+.eye[aria-pressed="true"] { color: var(--ink); }
+.eye svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.acc { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.acc:first-of-type { border-top: 0; }
+.acc .when { color: var(--muted); text-align: right; }
+.acc .when.none { font-style: italic; }
 .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .status { font-size: 14px; color: var(--muted); }
 .status.err { color: var(--warn); }
@@ -215,6 +224,10 @@ details .col { margin-top: 12px; }
           <label for="p-new">Yeni parol (ən azı 6 simvol)</label>
           <input type="password" id="p-new" autocomplete="new-password">
         </div>
+        <div class="field">
+          <label for="p-new2">Yeni parolu təkrar yazın</label>
+          <input type="password" id="p-new2" autocomplete="new-password">
+        </div>
         <div class="row">
           <button class="btn" id="p-btn" type="button">Parolu dəyiş</button>
           <span class="status" id="p-status" role="status"></span>
@@ -259,6 +272,11 @@ details .col { margin-top: 12px; }
         <summary>Hesabata bax</summary>
         <textarea class="report" id="report" readonly></textarea>
       </details>
+    </div>
+    <div class="card" id="acc-card">
+      <h2>Parolların yenilənmə tarixi</h2>
+      <p class="sub">Parolların özü görünmür və heç yerdə saxlanmır. Yalnız hər istifadəçinin parolunun son dəfə nə vaxt təyin edildiyi göstərilir.</p>
+      <div id="acc-list"></div>
     </div>
     <div class="card" id="purge-card" hidden>
       <h2>Köhnə qeydləri sil</h2>
@@ -354,6 +372,7 @@ details .col { margin-top: 12px; }
   function setData(j) {
     S.entries = j.entries || [];
     S.users = j.users || [];
+    S.accounts = j.accounts || [];
     idx = {};
     S.names = {};
     S.users.forEach(function (u) { S.names[u.username] = u.name; });
@@ -393,6 +412,7 @@ details .col { margin-top: 12px; }
     S.token = null; S.me = null; S.entries = []; S.users = []; idx = {};
     setToken(null);
     $("l-pass").value = "";
+    hidePasswords();
     showLogin(msg);
   }
 
@@ -606,17 +626,26 @@ details .col { margin-top: 12px; }
 
   function onPasswd() {
     var st = $("p-status");
-    var o = $("p-old").value, n = $("p-new").value;
-    if (!o || n.length < 6) { st.className = "status err"; st.textContent = "Köhnə parolu yazın, yeni parol ən azı 6 simvol olsun."; return; }
+    var o = $("p-old").value, n = $("p-new").value, n2 = $("p-new2").value;
+    function bad(t) { st.className = "status err"; st.textContent = t; }
+    if (!o) return bad("Köhnə parolu yazın.");
+    if (n.length < 6) return bad("Yeni parol ən azı 6 simvol olsun.");
+    if (n !== n2) return bad("Yeni parollar uyğun gəlmir. Təkrar yazılan parolu yoxlayın.");
     st.className = "status";
     st.textContent = "Yoxlanılır…";
-    api("passwd", { oldPassword: o, newPassword: n }).then(function (j) {
-      if (j && j.ok) { $("p-old").value = ""; $("p-new").value = ""; st.textContent = "Parol dəyişdirildi."; }
-      else {
-        st.className = "status err";
-        st.textContent = j && j.error === "bad_login" ? "Köhnə parol səhvdir." : j && j.error === "short_password" ? "Yeni parol çox qısadır." : "Alınmadı.";
+    api("passwd", { oldPassword: o, newPassword: n, newPassword2: n2 }).then(function (j) {
+      if (j && j.ok) {
+        $("p-old").value = ""; $("p-new").value = ""; $("p-new2").value = "";
+        hidePasswords();
+        st.textContent = "Parol dəyişdirildi.";
+        if (canView()) refresh(true);
+      } else {
+        bad(j && j.error === "bad_login" ? "Köhnə parol səhvdir."
+          : j && j.error === "short_password" ? "Yeni parol çox qısadır."
+          : j && j.error === "mismatch" ? "Yeni parollar uyğun gəlmir."
+          : "Alınmadı.");
       }
-    }).catch(function () { st.className = "status err"; st.textContent = "Serverə qoşulmaq alınmadı."; });
+    }).catch(function () { bad("Serverə qoşulmaq alınmadı."); });
   }
 
   /* ---------- Toplu bölmə (admin) ---------- */
@@ -747,6 +776,7 @@ details .col { margin-top: 12px; }
     renderToday();
     renderGrid();
     renderDaily();
+    renderAccounts();
     $("report").value = buildReport();
   }
 
@@ -819,6 +849,66 @@ details .col { margin-top: 12px; }
     }
   }
 
+  /* ---------- Parol xanalarında göz işarəsi ---------- */
+  function svgEl(paths) {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    paths.forEach(function (p) {
+      var n = document.createElementNS(ns, p.t);
+      Object.keys(p.a).forEach(function (k) { n.setAttribute(k, p.a[k]); });
+      svg.appendChild(n);
+    });
+    return svg;
+  }
+  var EYE_ON = [{ t: "path", a: { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" } }, { t: "circle", a: { cx: "12", cy: "12", r: "3" } }];
+  var EYE_OFF = [{ t: "path", a: { d: "M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" } }, { t: "line", a: { x1: "1", y1: "1", x2: "23", y2: "23" } }];
+  function addEye(id) {
+    var inp = $(id);
+    var wrap = el("div", { class: "pwwrap" });
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+    var btn = el("button", { class: "eye", type: "button", "aria-label": "Parolu göstər", "aria-pressed": "false" });
+    btn.appendChild(svgEl(EYE_ON));
+    btn.addEventListener("click", function () {
+      var show = inp.type === "password";
+      inp.type = show ? "text" : "password";
+      btn.setAttribute("aria-pressed", String(show));
+      btn.setAttribute("aria-label", show ? "Parolu gizlət" : "Parolu göstər");
+      btn.replaceChildren(svgEl(show ? EYE_OFF : EYE_ON));
+    });
+    wrap.appendChild(btn);
+  }
+  function hidePasswords() {
+    ["l-pass", "p-old", "p-new", "p-new2"].forEach(function (id) {
+      var i = $(id);
+      if (i && i.type !== "password") {
+        i.type = "password";
+        var b = i.parentNode.querySelector(".eye");
+        if (b) { b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", "Parolu göstər"); b.replaceChildren(svgEl(EYE_ON)); }
+      }
+    });
+  }
+
+  /* ---------- Parolların yenilənmə tarixi (admin) ---------- */
+  function pwDate(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/.exec(String(s || ""));
+    return m ? m[3] + "." + m[2] + "." + m[1] + (m[4] ? " " + m[4] : "") : "";
+  }
+  function renderAccounts() {
+    var box = $("acc-list");
+    box.replaceChildren();
+    var list = (S.accounts || []).slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    if (!list.length) { box.append(el("span", { class: "sub", text: "Siyahı boşdur." })); return; }
+    list.forEach(function (u) {
+      var d = pwDate(u.pwChanged);
+      box.append(el("div", { class: "acc" },
+        el("span", { text: u.name }),
+        el("span", { class: "when" + (d ? "" : " none"), text: d || "tarix qeyd olunmayıb" })));
+    });
+  }
+
   /* ---------- Köhnə qeydləri silmək ("sil" hüququ) ---------- */
   function purgeReset() {
     $("purge-go").hidden = true;
@@ -876,6 +966,7 @@ details .col { margin-top: 12px; }
 
   /* ---------- Başlanğıc ---------- */
   function boot() {
+    ["l-pass", "p-old", "p-new", "p-new2"].forEach(addEye);
     $("login-form").addEventListener("submit", onLogin);
     $("logout").addEventListener("click", function () { logout(); });
     $("tab-day").addEventListener("click", function () { if (S.tab !== "day") switchTab("day"); });
