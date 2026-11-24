@@ -1069,6 +1069,8 @@ details .col { margin-top: 12px; }
     // Ortaq sətirlər cədvəli (sharedStrings), Excel-in özü kimi
     var sstList = [], sstMap = {}, sstCount = 0;
     function sst(t) {
+      // Qeyri-adi boşluq simvollarını adi boşluğa çevir, sıfır enli simvolları at
+      t = String(t).replace(/[\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/g, " ").replace(/[\u200B-\u200D\u2060\uFEFF]/g, "");
       sstCount++;
       if (!Object.prototype.hasOwnProperty.call(sstMap, t)) { sstMap[t] = sstList.length; sstList.push(t); }
       return sstMap[t];
@@ -1099,7 +1101,7 @@ details .col { margin-top: 12px; }
       '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
       '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>';
     var sstXml = hdr + '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + sstCount + '" uniqueCount="' + sstList.length + '">' +
-      sstList.map(function (t) { return '<si><t' + (/^\s|\s$/.test(t) ? ' xml:space="preserve"' : '') + '>' + xesc(t) + '</t></si>'; }).join("") + '</sst>';
+      sstList.map(function (t) { return '<si><t' + (/\s/.test(t) ? ' xml:space="preserve"' : '') + '>' + xesc(t) + '</t></si>'; }).join("") + '</sst>';
     var now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
     var core = hdr + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>Gündəlik qeyd</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + now + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + now + '</dcterms:modified></cp:coreProperties>';
     var app = hdr + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Gundelik qeyd</Application><AppVersion>3.1</AppVersion></Properties>';
