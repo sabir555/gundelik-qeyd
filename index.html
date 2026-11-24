@@ -148,7 +148,7 @@ details .col { margin-top: 12px; }
 </style>
 </head>
 <body>
-<div style="position:fixed;right:6px;bottom:3px;font-size:10px;color:#8a8f98;z-index:5;pointer-events:none">v24.11-F</div>
+<div style="position:fixed;right:6px;bottom:3px;font-size:10px;color:#8a8f98;z-index:5;pointer-events:none">v24.11-G</div>
 
 <!-- Giriş -->
 <div class="wrap login" id="login" hidden>
@@ -696,8 +696,8 @@ details .col { margin-top: 12px; }
 
     var rights = myRights();
     var mine = S.me ? entryOf(S.me.username, S.date) : null;
-    var editable = mine ? !!rights.edit : !!rights.write;
-    var hint = "";
+    var editable = S.loaded && (mine ? !!rights.edit : !!rights.write);
+    var hint = S.loaded ? "" : "Yüklənir…";
     if (S.loaded) {
       if (mine) hint = rights.edit
         ? "Bu tarix üçün qeydiniz var. Dəyişib yenidən saxlaya bilərsiniz."
@@ -711,6 +711,8 @@ details .col { margin-top: 12px; }
     setItemsEditable(editable);
     $("save").hidden = !editable;
     $("f-hint").textContent = hint;
+    renumber();
+    if (!S.loaded) itemTAs().forEach(function (t) { t.placeholder = "Yüklənir…"; });
     $("save").textContent = S.confirming ? "Bəli, göndər" : (mine ? "Yenilə" : "Yadda saxla");
 
     if (canView()) {
@@ -1103,7 +1105,7 @@ details .col { margin-top: 12px; }
     var sstXml = hdr + '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + sstCount + '" uniqueCount="' + sstList.length + '">' +
       sstList.map(function (t) { return '<si><t' + (/\s/.test(t) ? ' xml:space="preserve"' : '') + '>' + xesc(t) + '</t></si>'; }).join("") + '</sst>';
     var now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
-    var core = hdr + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>v24.11-F</dc:title><dc:creator>Gündəlik qeyd</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + now + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + now + '</dcterms:modified></cp:coreProperties>';
+    var core = hdr + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>v24.11-G</dc:title><dc:creator>Gündəlik qeyd</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + now + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + now + '</dcterms:modified></cp:coreProperties>';
     var app = hdr + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Gundelik qeyd</Application><AppVersion>3.1</AppVersion></Properties>';
     var all = [
       { name: "[Content_Types].xml", data: enc.encode(ct) },
