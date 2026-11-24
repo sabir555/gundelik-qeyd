@@ -260,6 +260,24 @@ details .col { margin-top: 12px; }
         <textarea class="report" id="report" readonly></textarea>
       </details>
     </div>
+    <div class="card" id="purge-card" hidden>
+      <h2>Köhnə qeydləri sil</h2>
+      <p class="sub">Seçdiyiniz müddətdən köhnə bütün qeydlər həmişəlik silinir. Əvvəlcə Excel endirməyi məsləhət görürük.</p>
+      <div class="row">
+        <div style="width:190px">
+          <select id="purge-days" aria-label="Silinəcək müddət">
+            <option value="30">30 gündən köhnə</option>
+            <option value="60">60 gündən köhnə</option>
+            <option value="90" selected>90 gündən köhnə</option>
+            <option value="180">180 gündən köhnə</option>
+            <option value="365">1 ildən köhnə</option>
+          </select>
+        </div>
+        <button class="btn" id="purge-check" type="button">Neçə qeyd silinəcək?</button>
+        <button class="btn primary" id="purge-go" type="button" hidden>Bəli, sil</button>
+      </div>
+      <span class="status" id="purge-status" role="status"></span>
+    </div>
   </section>
 </div>
 
@@ -411,6 +429,9 @@ details .col { margin-top: 12px; }
     $("app").hidden = false;
     $("who").textContent = S.me.name;
     $("tabs").hidden = !canView();
+    $("purge-card").hidden = !(canView() && myRights().del);
+    purgeReset();
+    purgeStatus("");
     $("admin-day").hidden = !canView();
     $("my-recent").hidden = canView();
     S.date = todayKey();
@@ -798,6 +819,46 @@ details .col { margin-top: 12px; }
     }
   }
 
+  /* ---------- Köhnə qeydləri silmək ("sil" hüququ) ---------- */
+  function purgeReset() {
+    $("purge-go").hidden = true;
+    S.purgeDays = null;
+  }
+  function purgeStatus(t, err) { var s = $("purge-status"); s.className = err ? "status err" : "status"; s.textContent = t; }
+  function purgeErr(j) {
+    return j && j.error === "forbidden" ? "Bu əməliyyat üçün hüququnuz yoxdur."
+      : j && j.error === "bad_days" ? "Müddət yanlışdır."
+      : "Alınmadı. Bir az sonra yenidən yoxlayın.";
+  }
+  function purgeCheck() {
+    var days = Number($("purge-days").value);
+    purgeReset();
+    purgeStatus("Yoxlanılır…");
+    $("purge-check").disabled = true;
+    api("purge", { days: days, dry: true }).then(function (j) {
+      if (j && j.ok) {
+        if (!j.count) { purgeStatus(dotDate(j.cutoff) + " tarixindən əvvəl qeyd yoxdur."); return; }
+        S.purgeDays = days;
+        $("purge-go").hidden = false;
+        purgeStatus(dotDate(j.cutoff) + " tarixindən əvvəlki " + j.count + " qeyd silinəcək. Təsdiq üçün \"Bəli, sil\" basın.");
+      } else purgeStatus(purgeErr(j), true);
+    }).catch(function () { purgeStatus("Serverə qoşulmaq alınmadı.", true); })
+      .then(function () { $("purge-check").disabled = false; });
+  }
+  function purgeGo() {
+    if (!S.purgeDays) return;
+    var days = S.purgeDays;
+    $("purge-go").disabled = true;
+    $("purge-check").disabled = true;
+    purgeStatus("Silinir…");
+    api("purge", { days: days, dry: false }).then(function (j) {
+      purgeReset();
+      if (j && j.ok) { purgeStatus("Silindi: " + j.removed + " qeyd."); refresh(); }
+      else purgeStatus(purgeErr(j), true);
+    }).catch(function () { purgeStatus("Serverə qoşulmaq alınmadı.", true); })
+      .then(function () { $("purge-go").disabled = false; $("purge-check").disabled = false; });
+  }
+
   /* ---------- Tablar və render ---------- */
   function switchTab(t) {
     S.tab = t;
@@ -828,6 +889,9 @@ details .col { margin-top: 12px; }
     $("range").addEventListener("change", function (e) { S.range = Number(e.target.value); refresh(); });
     $("copy").addEventListener("click", copyReport);
     $("xlsx").addEventListener("click", downloadXlsx);
+    $("purge-check").addEventListener("click", purgeCheck);
+    $("purge-go").addEventListener("click", purgeGo);
+    $("purge-days").addEventListener("change", function () { purgeReset(); purgeStatus(""); });
 
     // Admin üçün siyahı hər dəqiqə yenilənir (səhifə açıq və görünəndə).
     setInterval(function () {
