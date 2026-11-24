@@ -531,7 +531,6 @@ details .col { margin-top: 12px; }
       el("div", { class: "who" }, el("span", { text: withActions ? longDate(e.date) + ", " + weekday(e.date) : nameOf(e.username) }), el("span", { class: "when", text: timeOf(e.ts) })),
       el("div", { class: "v", text: e.text })
     );
-    if (!withActions && myRights().del) card.append(delButton(e));
     if (withActions && myRights().edit) {
       card.append(el("div", { class: "actions" }, el("button", {
         class: "btn small", type: "button", text: "Redaktə et",
@@ -764,7 +763,9 @@ details .col { margin-top: 12px; }
       var sec = el("div", { class: "entry" },
         el("div", { class: "dayhead" }, el("strong", { text: longDate(d) + ", " + weekday(d) }), el("span", { class: "sub", text: wrote.length + " nəfər yazıb" })));
       wrote.forEach(function (e) {
-        sec.append(el("div", { class: "line" }, el("span", { class: "k2", text: nameOf(e.username) }), el("span", { class: "v", text: e.text })));
+        var ln = el("div", { class: "line" }, el("span", { class: "k2", text: nameOf(e.username) }), el("span", { class: "v", text: e.text }));
+        if (myRights().del) ln.append(delButton(e));
+        sec.append(ln);
       });
       box.append(sec);
     });
