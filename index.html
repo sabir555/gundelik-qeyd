@@ -1010,9 +1010,11 @@ details .col { margin-top: 12px; }
   }
   function colName(i) { var s = ""; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
   // Üslublar: 1 mətn (haşiyə, sətirə keçir), 2 qalın başlıq (mərkəzdə), 3 nömrə (solda), 4 qalın başlıq (solda), 5 mərkəzdə mətn
-  var XL_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+  var XL_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+    '<fonts count="2">' +
+    '<font><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/><family val="2"/></font>' +
+    '<font><b/><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/><family val="2"/></font></fonts>' +
     '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
     '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' +
     '<border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>' +
@@ -1020,14 +1022,19 @@ details .col { margin-top: 12px; }
     '<cellXfs count="6">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>' +
-    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top"/></xf>' +
-    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' +
-    '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+    '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+    '<dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium9" defaultPivotStyle="PivotStyleLight16"/></styleSheet>';
 
-  function sheetXml(sh) {
-    var x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+  function sheetXml(sh, sst) {
+    var lastCol = 0;
+    sh.rows.forEach(function (r) { lastCol = Math.max(lastCol, r.length); });
+    var x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<dimension ref="A1:' + colName(Math.max(lastCol, 1) - 1) + Math.max(sh.rows.length, 1) + '"/>' +
+      '<sheetViews><sheetView workbookViewId="0"' + (sh.first ? ' tabSelected="1"' : '') + '/></sheetViews>' +
       '<sheetFormatPr defaultRowHeight="15"/><cols>';
     sh.cols.forEach(function (w, i) { x += '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; });
     x += '</cols><sheetData>';
@@ -1037,23 +1044,31 @@ details .col { margin-top: 12px; }
         var ref = colName(i) + (r + 1);
         if (typeof c.v === "number") x += '<c r="' + ref + '" s="' + c.s + '"><v>' + c.v + '</v></c>';
         else if (c.v === "" || c.v == null) x += '<c r="' + ref + '" s="' + c.s + '"/>';
-        else x += '<c r="' + ref + '" s="' + c.s + '" t="inlineStr"><is><t xml:space="preserve">' + xesc(c.v) + '</t></is></c>';
+        else x += '<c r="' + ref + '" s="' + c.s + '" t="s"><v>' + sst(String(c.v)) + '</v></c>';
       });
       x += '</row>';
     });
-    return x + '</sheetData></worksheet>';
+    return x + '</sheetData><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
   }
   function buildXlsx(sheets) {
-    var enc = new TextEncoder(), hdr = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    var enc = new TextEncoder(), hdr = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     var used = {};
-    sheets.forEach(function (sh) {
+    sheets.forEach(function (sh, i) {
       var n = sh.name.replace(/[\\\/?*\[\]:]/g, "-").slice(0, 31) || "Sheet", base = n, k = 2;
       while (used[n.toLowerCase()]) { var suf = " (" + k++ + ")"; n = base.slice(0, 31 - suf.length) + suf; }
       used[n.toLowerCase()] = true;
       sh.safe = n;
+      sh.first = i === 0;
     });
-    var ct = hdr + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
-    var wb = hdr + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>';
+    // Ortaq sətirlər cədvəli (sharedStrings), Excel-in özü kimi
+    var sstList = [], sstMap = {}, sstCount = 0;
+    function sst(t) {
+      sstCount++;
+      if (!Object.prototype.hasOwnProperty.call(sstMap, t)) { sstMap[t] = sstList.length; sstList.push(t); }
+      return sstMap[t];
+    }
+    var ct = hdr + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>';
+    var wb = hdr + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><workbookPr/><bookViews><workbookView xWindow="0" yWindow="0" windowWidth="20000" windowHeight="10000" activeTab="0"/></bookViews><sheets>';
     var rels = hdr + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
     var files = [];
     sheets.forEach(function (sh, i) {
@@ -1061,18 +1076,34 @@ details .col { margin-top: 12px; }
       ct += '<Override PartName="/xl/worksheets/sheet' + n + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
       wb += '<sheet name="' + xesc(sh.safe) + '" sheetId="' + n + '" r:id="rId' + n + '"/>';
       rels += '<Relationship Id="rId' + n + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + n + '.xml"/>';
-      files.push({ name: "xl/worksheets/sheet" + n + ".xml", data: enc.encode(sheetXml(sh)) });
+      files.push({ name: "xl/worksheets/sheet" + n + ".xml", data: enc.encode(sheetXml(sh, sst)) });
     });
-    ct += '</Types>';
-    wb += '</sheets></workbook>';
-    rels += '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
-    var root = hdr + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+    var N = sheets.length;
+    ct += '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' +
+      '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+      '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>';
+    wb += '</sheets><calcPr calcId="191029"/></workbook>';
+    rels += '<Relationship Id="rId' + (N + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '<Relationship Id="rId' + (N + 2) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>';
+    var root = hdr + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
+      '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>';
+    var sstXml = hdr + '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + sstCount + '" uniqueCount="' + sstList.length + '">' +
+      sstList.map(function (t) { return '<si><t' + (/^\s|\s$/.test(t) ? ' xml:space="preserve"' : '') + '>' + xesc(t) + '</t></si>'; }).join("") + '</sst>';
+    var now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+    var core = hdr + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>Gündəlik qeyd</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + now + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + now + '</dcterms:modified></cp:coreProperties>';
+    var app = hdr + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Microsoft Excel</Application></Properties>';
     var all = [
       { name: "[Content_Types].xml", data: enc.encode(ct) },
       { name: "_rels/.rels", data: enc.encode(root) },
+      { name: "docProps/core.xml", data: enc.encode(core) },
+      { name: "docProps/app.xml", data: enc.encode(app) },
       { name: "xl/workbook.xml", data: enc.encode(wb) },
       { name: "xl/_rels/workbook.xml.rels", data: enc.encode(rels) },
-      { name: "xl/styles.xml", data: enc.encode(XL_STYLES) }
+      { name: "xl/styles.xml", data: enc.encode(XL_STYLES) },
+      { name: "xl/sharedStrings.xml", data: enc.encode(sstXml) }
     ].concat(files);
     return zipStore(all);
   }
