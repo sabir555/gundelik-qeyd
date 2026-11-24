@@ -113,7 +113,8 @@ textarea { resize: vertical; min-height: 110px; }
 .chip.warn { color: var(--warn); border-color: var(--warn); }
 .chip.ok { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .empty { color: var(--muted); padding: 8px 0; }
-.dayhead { display: flex; flex-direction: column; }
+.dayhead { display: flex; flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.dayhead .dh { display: flex; flex-direction: column; }
 .dayhead strong { font-weight: 600; }
 .line { display: flex; flex-direction: column; padding-top: 6px; border-top: 1px solid var(--line); }
 .k2 { font-weight: 600; font-size: 14px; }
@@ -266,7 +267,7 @@ details .col { margin-top: 12px; }
       <h2>Toplu hesabat</h2>
       <div class="row">
         <button class="btn primary" id="copy" type="button">Mətni kopyala</button>
-        <button class="btn" id="xlsx" type="button">Excel yüklə</button>
+        <button class="btn" id="xlsx" type="button">Hamısını Excel yüklə</button>
         <span class="status" id="rep-status" role="status"></span>
       </div>
       <details>
@@ -760,7 +761,9 @@ details .col { margin-top: 12px; }
       if (!wrote.length) return;
       any = true;
       var sec = el("div", { class: "entry" },
-        el("div", { class: "dayhead" }, el("strong", { text: longDate(d) + ", " + weekday(d) }), el("span", { class: "sub", text: wrote.length + " nəfər yazıb" })));
+        el("div", { class: "dayhead" },
+          el("div", { class: "dh" }, el("strong", { text: longDate(d) + ", " + weekday(d) }), el("span", { class: "sub", text: wrote.length + " nəfər yazıb" })),
+          el("button", { class: "btn small", type: "button", text: "Excel", "aria-label": dotDate(d) + " tarixini Excel yüklə", onclick: function () { downloadXlsx(d); } })));
       wrote.forEach(function (e) {
         var ln = el("div", { class: "line" }, el("span", { class: "k2", text: nameOf(e.username) }), el("span", { class: "v", text: e.text }));
         if (myRights().del) ln.append(delButton(e));
@@ -927,10 +930,11 @@ details .col { margin-top: 12px; }
     return zipStore(all);
   }
 
-  function downloadXlsx() {
+  // onlyDay verilərsə yalnız həmin günün faylı, verilməzsə seçilmiş müddətin hamısı (hər gün ayrı sheet).
+  function downloadXlsx(onlyDay) {
     var st = $("rep-status");
     st.className = "status";
-    var days = rangeDays();
+    var days = onlyDay ? [onlyDay] : rangeDays();
     var sheets = [];
 
     // Hər gün ayrıca sheet (dd.mm.yyyy): № | tarix | Kurator. Nömrələr gün boyu davam edir.
@@ -965,7 +969,7 @@ details .col { margin-top: 12px; }
       line.push({ v: n, s: 5 });
       grid.push(line);
     });
-    sheets.push({ name: "Cədvəl", cols: [28].concat(days.map(function () { return 7; }), [8]), rows: grid });
+    if (!onlyDay) sheets.push({ name: "Cədvəl", cols: [28].concat(days.map(function () { return 7; }), [8]), rows: grid });
 
     var abs = [[{ v: "Tarix", s: 4 }, { v: "İşçi", s: 4 }]];
     days.slice().reverse().forEach(function (d) {
@@ -976,7 +980,7 @@ details .col { margin-top: 12px; }
     try {
       var blob = buildXlsx(sheets);
       var url = URL.createObjectURL(blob);
-      var a = el("a", { href: url, download: "gundelik-is-" + todayKey() + ".xlsx" });
+      var a = el("a", { href: url, download: "gundelik-is-" + (onlyDay ? onlyDay : days[0] + "_" + days[days.length - 1]) + ".xlsx" });
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1117,7 +1121,7 @@ details .col { margin-top: 12px; }
     $("p-btn").addEventListener("click", onPasswd);
     $("range").addEventListener("change", function (e) { S.range = Number(e.target.value); refresh(); });
     $("copy").addEventListener("click", copyReport);
-    $("xlsx").addEventListener("click", downloadXlsx);
+    $("xlsx").addEventListener("click", function () { downloadXlsx(); });
     $("purge-check").addEventListener("click", purgeCheck);
     $("purge-go").addEventListener("click", purgeGo);
     $("purge-days").addEventListener("change", function () { purgeReset(); purgeStatus(""); });
