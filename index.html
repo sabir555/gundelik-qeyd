@@ -89,6 +89,16 @@ textarea, input[type="date"], input[type="text"], input[type="password"], select
 }
 textarea { resize: vertical; min-height: 110px; }
 .field { display: flex; flex-direction: column; }
+.items { display: flex; flex-direction: column; gap: 8px; }
+.item { display: flex; gap: 8px; align-items: flex-start; }
+.item .n { width: 26px; flex: none; padding-top: 11px; color: var(--muted); text-align: right; font-size: 14px; }
+.item textarea { flex: 1; min-height: 44px; resize: none; overflow: hidden; line-height: 1.4; }
+.item .x { width: 40px; height: 44px; flex: none; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 8px; cursor: pointer; font-size: 20px; line-height: 1; }
+.xl { width: 100%; border-collapse: collapse; font-size: 15px; }
+.xl th, .xl td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+.xl th { font-weight: 600; text-align: center; background: var(--bg); }
+.xl td.no { width: 34px; text-align: left; }
+.xl td.kur { width: 28%; }
 .pwwrap { position: relative; }
 .pwwrap input { padding-right: 46px; }
 .eye { position: absolute; right: 2px; top: 0; bottom: 0; width: 42px; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
@@ -192,9 +202,15 @@ details .col { margin-top: 12px; }
     <form class="card" id="form" autocomplete="off">
       <h2>Mənim qeydim</h2>
       <p class="sub" id="f-hint"></p>
-      <div class="field">
-        <label for="f-text">Bu gün nə etdim</label>
-        <textarea id="f-text" rows="5" maxlength="2000" placeholder="Məs: 1C-də 12 işçinin əmək haqqı hesablamasını yoxladım"></textarea>
+      <div class="field" role="group" aria-labelledby="f-label">
+        <label id="f-label">Bu gün nə etdim</label>
+        <p class="sub" id="f-sub">Hər işi ayrı sətirdə yazın. Enter yeni sətir açır.</p>
+        <div class="items" id="items"></div>
+        <div class="row">
+          <button class="btn small" id="add-item" type="button">+ Sətir əlavə et</button>
+          <span class="status" id="f-count" role="status"></span>
+        </div>
+        <textarea id="f-text" hidden aria-hidden="true"></textarea>
       </div>
       <div class="row">
         <button class="btn primary" id="save" type="submit">Yadda saxla</button>
@@ -204,7 +220,11 @@ details .col { margin-top: 12px; }
 
     <!-- İşçi üçün: öz son qeydləri -->
     <div class="card" id="my-recent" hidden>
-      <h2>Son qeydlərim</h2>
+      <div class="row" style="justify-content:space-between">
+        <h2>Son qeydlərim</h2>
+        <button class="btn small" id="my-xlsx" type="button" hidden>Hamısını Excel yüklə</button>
+      </div>
+      <p class="sub">Son 30 günün qeydləri Excel faylındakı kimi göstərilir.</p>
       <div class="feed" id="my-feed"></div>
     </div>
 
@@ -496,9 +516,133 @@ details .col { margin-top: 12px; }
   /* ---------- Gün bölməsi ---------- */
   function fillForm() {
     var e = S.me ? entryOf(S.me.username, S.date) : null;
-    $("f-text").value = e ? e.text : "";
+    setFormText(e ? e.text : "");
     S.formDate = S.date;
     S.dirty = false;
+  }
+
+  /* ---------- Hər iş ayrı sətirdə: işçi forması ---------- */
+  var MAX_TEXT = 2000;
+  S.formEditable = true;
+
+  function cleanItem(x) { return unquoteEnds(String(x).trim()).replace(/^\s*(?:\d+[.)]|[-•*])\s*/, "").trim(); }
+  function itemsFromText(t) {
+    var a = String(t || "").split(/\r?\n/).map(cleanItem).filter(function (x) { return x; });
+    return a.length ? a : [""];
+  }
+  function autosize(ta) {
+    ta.style.height = "auto";
+    if (ta.scrollHeight) ta.style.height = ta.scrollHeight + "px";
+  }
+  function itemTAs() { return Array.prototype.slice.call($("items").querySelectorAll("textarea")); }
+  function syncText() {
+    $("f-text").value = itemTAs().map(function (t) { return t.value.trim(); }).filter(function (x) { return x; }).join("\n");
+    var len = $("f-text").value.length, c = $("f-count");
+    c.className = len > MAX_TEXT ? "status err" : "status";
+    c.textContent = len > MAX_TEXT - 300 ? len + " / " + MAX_TEXT + " simvol" : "";
+  }
+  function itemsChanged() {
+    syncText();
+    $("f-text").dispatchEvent(new Event("input"));
+  }
+  function renumber() {
+    Array.prototype.forEach.call($("items").children, function (row, i) {
+      row.firstChild.textContent = (i + 1) + ".";
+      row.lastChild.setAttribute("aria-label", (i + 1) + "-ci sətri sil");
+    });
+    var first = $("items").querySelector("textarea");
+    itemTAs().forEach(function (t, i) { t.placeholder = i === 0 && itemTAs().length === 1 ? "Məs: 1C-də 12 işçinin əmək haqqı hesablamasını yoxladım" : ""; });
+    if (first) first.setAttribute("aria-label", "1-ci iş");
+    itemTAs().forEach(function (t, i) { t.setAttribute("aria-label", (i + 1) + "-ci iş"); });
+  }
+  function addItemRow(value, before, focus) {
+    var ta = el("textarea", { rows: "1", autocomplete: "off" });
+    ta.value = value || "";
+    ta.readOnly = !S.formEditable;
+    var x = el("button", { class: "x", type: "button", text: "×" });
+    x.hidden = !S.formEditable;
+    var row = el("div", { class: "item" }, el("span", { class: "n" }), ta, x);
+    if (before) $("items").insertBefore(row, before); else $("items").appendChild(row);
+    ta.addEventListener("input", function () { autosize(ta); itemsChanged(); });
+    ta.addEventListener("keydown", function (ev) {
+      if (!S.formEditable) return;
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        var nr = addItemRow("", row.nextSibling, true);
+        renumber(); itemsChanged();
+      } else if (ev.key === "Backspace" && ta.value === "" && itemTAs().length > 1) {
+        ev.preventDefault();
+        var prev = row.previousSibling, next = row.nextSibling;
+        row.remove(); renumber(); itemsChanged();
+        var f = (prev || next);
+        if (f) { var t = f.querySelector("textarea"); t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+      }
+    });
+    ta.addEventListener("paste", function (ev) {
+      if (!S.formEditable) return;
+      var txt = (ev.clipboardData || window.clipboardData).getData("text");
+      if (!/\r?\n/.test(txt)) return;
+      var lines = String(txt).split(/\r?\n/).map(cleanItem).filter(function (v) { return v; });
+      if (!lines.length) return;
+      ev.preventDefault();
+      var v = ta.value, s0 = ta.selectionStart, e0 = ta.selectionEnd;
+      lines[0] = v.slice(0, s0) + lines[0];
+      lines[lines.length - 1] += v.slice(e0);
+      ta.value = lines[0]; autosize(ta);
+      var ref = row.nextSibling;
+      lines.slice(1).forEach(function (l) { var r2 = addItemRow(l, ref, false); });
+      renumber(); itemsChanged();
+    });
+    x.addEventListener("click", function () {
+      if (itemTAs().length > 1) row.remove(); else ta.value = "";
+      renumber(); itemsChanged();
+    });
+    if (focus) ta.focus();
+    requestAnimationFrame(function () { autosize(ta); });
+    return row;
+  }
+  function renderItems(list) {
+    $("items").replaceChildren();
+    list.forEach(function (v) { addItemRow(v, null, false); });
+    renumber();
+    syncText();
+  }
+  function setFormText(t) {
+    $("f-text").value = String(t || "");
+    renderItems(itemsFromText(t));
+  }
+  function setItemsEditable(on) {
+    S.formEditable = !!on;
+    itemTAs().forEach(function (t) { t.readOnly = !on; });
+    Array.prototype.forEach.call($("items").querySelectorAll(".x"), function (b) { b.hidden = !on; });
+    $("add-item").hidden = !on;
+    $("f-sub").hidden = !on;
+  }
+
+  function entryItems(e) {
+    var items = String(e.text || "").split(/\r?\n/).map(function (x) { return cleanItem(x); }).filter(function (x) { return x; });
+    return items.length ? items : [""];
+  }
+
+  // İşçinin öz günü: Excel faylındakı kimi cədvəl (№ | tarix | Kurator), altında düymələr.
+  function myDayBlock(e) {
+    var who = nameOf(e.username);
+    var rows = entryItems(e).map(function (t, i) {
+      return el("tr", {}, el("td", { class: "no", text: String(i + 1) }), el("td", { text: t }), el("td", { class: "kur", text: who }));
+    });
+    var tbl = el("table", { class: "xl" },
+      el("thead", {}, el("tr", {}, el("th", { text: "№" }), el("th", { text: dotDate(e.date) }), el("th", { text: "Kurator" }))),
+      el("tbody", {}, rows));
+    var actions = el("div", { class: "actions" },
+      el("button", { class: "btn small", type: "button", text: "Excel", "aria-label": dotDate(e.date) + " tarixini Excel yüklə", onclick: function () { downloadXlsx(e.date, true); } }));
+    if (myRights().edit) {
+      actions.append(el("button", { class: "btn small", type: "button", text: "Redaktə et",
+        onclick: function () { setDate(e.date); $("form").scrollIntoView({ behavior: "smooth", block: "start" }); } }));
+    }
+    return el("div", { class: "entry" },
+      el("div", { class: "who" }, el("span", { text: longDate(e.date) + ", " + weekday(e.date) }), el("span", { class: "when", text: timeOf(e.ts) })),
+      tbl,
+      actions);
   }
 
   // Konkret qeydi silmək: ilk basış təsdiq istəyir, ikinci basış silir.
@@ -563,7 +707,7 @@ details .col { margin-top: 12px; }
         : "Gündə yalnız bir dəfə yazmaq olur. Saxladıqdan sonra dəyişmək olmayacaq.";
     }
     $("form").hidden = !(rights.write || rights.edit);
-    $("f-text").readOnly = !editable;
+    setItemsEditable(editable);
     $("save").hidden = !editable;
     $("f-hint").textContent = hint;
     $("save").textContent = S.confirming ? "Bəli, göndər" : (mine ? "Yenilə" : "Yadda saxla");
@@ -597,7 +741,8 @@ details .col { margin-top: 12px; }
       var mineAll = S.entries.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
       if (!S.loaded) mf.append(el("div", { class: "empty", text: "Yüklənir…" }));
       else if (!mineAll.length) mf.append(el("div", { class: "empty", text: "Hələ qeydiniz yoxdur." }));
-      else mineAll.forEach(function (e) { mf.append(entryCard(e, true)); });
+      else mineAll.forEach(function (e) { mf.append(myDayBlock(e)); });
+      $("my-xlsx").hidden = !(S.loaded && mineAll.length);
     }
   }
 
@@ -609,15 +754,17 @@ details .col { margin-top: 12px; }
     S.confirming = false;
     $("save-status").textContent = "";
     if (S.tab !== "day") { switchTab("day"); return; }
-    if (canView()) { $("f-text").value = ""; S.formDate = null; refresh(); }
+    if (canView()) { setFormText(""); S.formDate = null; refresh(); }
     else { fillForm(); renderDay(); }
   }
 
   function onSave(ev) {
     ev.preventDefault();
     var st = $("save-status");
+    syncText();
     var text = $("f-text").value.trim();
     if (!text) { st.className = "status err"; st.textContent = "Bu gün nə etdiyinizi yazın."; return; }
+    if (text.length > MAX_TEXT) { st.className = "status err"; st.textContent = "Qeyd çox uzundur (" + MAX_TEXT + " simvola qədər)."; return; }
     if (S.saving) return;
     var existing = S.me ? entryOf(S.me.username, S.date) : null;
     if (!existing && !myRights().edit && !S.confirming) {
@@ -930,27 +1077,38 @@ details .col { margin-top: 12px; }
     return zipStore(all);
   }
 
+  // Excel-dən çox sətirli xana kopyalananda mətn dırnağa alınır: ilk sətrin əvvəlindəki və son sətrin sonundakı tək dırnağı atır.
+  function unquoteEnds(x) {
+    var q = (x.match(/["“”]/g) || []).length;
+    if (q % 2 === 1) {
+      if (/^["“”]/.test(x)) x = x.slice(1).trim();
+      else if (/["“”]$/.test(x)) x = x.slice(0, -1).trim();
+    }
+    return x;
+  }
+
   // onlyDay verilərsə yalnız həmin günün faylı, verilməzsə seçilmiş müddətin hamısı (hər gün ayrı sheet).
-  function downloadXlsx(onlyDay) {
+  // mine true olarsa yalnız daxil olmuş işçinin öz qeydləri (son 30 gün).
+  function downloadXlsx(onlyDay, mine) {
     var st = $("rep-status");
     st.className = "status";
-    var days = onlyDay ? [onlyDay] : rangeDays();
+    var days;
+    if (onlyDay) days = [onlyDay];
+    else if (mine) { days = []; for (var i = 29; i >= 0; i--) days.push(addDays(todayKey(), -i)); }
+    else days = rangeDays();
+    var src = mine ? S.entries.filter(function (e) { return e.username === S.me.username; }) : S.entries;
     var sheets = [];
 
     // Hər gün ayrıca sheet (dd.mm.yyyy): № | tarix | Kurator. Nömrələr gün boyu davam edir.
-        days.forEach(function (d) {
-      var list = S.entries.filter(function (e) { return e.date === d; })
+    days.forEach(function (d) {
+      var list = src.filter(function (e) { return e.date === d; })
         .sort(function (a, b) { return nameOf(a.username).localeCompare(nameOf(b.username)); });
       if (!list.length) return;
       var rows = [[{ v: "№", s: 2 }, { v: dotDate(d), s: 2 }, { v: "Kurator", s: 2 }]];
       var n = 0;
       list.forEach(function (e) {
         var who = nameOf(e.username);
-        var items = String(e.text || "").split(/\r?\n/)
-          .map(function (x) { return x.replace(/^\s*(?:\d+[.)]|[-•*])\s*/, "").trim(); })
-          .filter(function (x) { return x; });
-        if (!items.length) items = [""];
-        items.forEach(function (t) { n++; rows.push([{ v: n, s: 3 }, { v: t, s: 1 }, { v: who, s: 1 }]); });
+        entryItems(e).forEach(function (t) { n++; rows.push([{ v: n, s: 3 }, { v: t, s: 1 }, { v: who, s: 1 }]); });
       });
       // Mətn sətirə keçmir: yalnız saytda Enter basılan yerdə yeni sətir olur. Sütun ən uzun mətnə görə genişlənir (Excel-in həddi 255).
       var longest = 0;
@@ -969,18 +1127,18 @@ details .col { margin-top: 12px; }
       line.push({ v: n, s: 5 });
       grid.push(line);
     });
-    if (!onlyDay) sheets.push({ name: "Cədvəl", cols: [28].concat(days.map(function () { return 7; }), [8]), rows: grid });
+    if (!onlyDay && !mine) sheets.push({ name: "Cədvəl", cols: [28].concat(days.map(function () { return 7; }), [8]), rows: grid });
 
     var abs = [[{ v: "Tarix", s: 4 }, { v: "İşçi", s: 4 }]];
     days.slice().reverse().forEach(function (d) {
       missingOn(d).forEach(function (u) { abs.push([{ v: dotDate(d), s: 1 }, { v: u.name, s: 1 }]); });
     });
-    sheets.push({ name: "Yazmayanlar", cols: [14, 30], rows: abs });
+    if (!mine) sheets.push({ name: "Yazmayanlar", cols: [14, 30], rows: abs });
 
     try {
       var blob = buildXlsx(sheets);
       var url = URL.createObjectURL(blob);
-      var a = el("a", { href: url, download: "gundelik-is-" + (onlyDay ? onlyDay : days[0] + "_" + days[days.length - 1]) + ".xlsx" });
+      var a = el("a", { href: url, download: (mine ? "qeydlerim-" : "gundelik-is-") + (onlyDay ? onlyDay : days[0] + "_" + days[days.length - 1]) + ".xlsx" });
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1119,9 +1277,11 @@ details .col { margin-top: 12px; }
     $("form").addEventListener("submit", onSave);
     $("f-text").addEventListener("input", function () { S.dirty = true; S.confirming = false; $("save").textContent = "Yadda saxla"; $("save-status").textContent = ""; });
     $("p-btn").addEventListener("click", onPasswd);
+    $("add-item").addEventListener("click", function () { addItemRow("", null, true); renumber(); itemsChanged(); });
     $("range").addEventListener("change", function (e) { S.range = Number(e.target.value); refresh(); });
     $("copy").addEventListener("click", copyReport);
     $("xlsx").addEventListener("click", function () { downloadXlsx(); });
+    $("my-xlsx").addEventListener("click", function () { downloadXlsx(null, true); });
     $("purge-check").addEventListener("click", purgeCheck);
     $("purge-go").addEventListener("click", purgeGo);
     $("purge-days").addEventListener("change", function () { purgeReset(); purgeStatus(""); });
