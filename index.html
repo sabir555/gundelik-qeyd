@@ -148,7 +148,7 @@ details .col { margin-top: 12px; }
 </style>
 </head>
 <body>
-<div style="position:fixed;right:6px;bottom:3px;font-size:10px;color:#8a8f98;z-index:5;pointer-events:none">v24.11-E</div>
+<div style="position:fixed;right:6px;bottom:3px;font-size:10px;color:#8a8f98;z-index:5;pointer-events:none">v24.11-F</div>
 
 <!-- Giriş -->
 <div class="wrap login" id="login" hidden>
@@ -644,16 +644,8 @@ details .col { margin-top: 12px; }
     return el("div", { class: "entry" },
       el("div", { class: "who" }, el("span", { text: longDate(e.date) + ", " + weekday(e.date) }), el("span", { class: "when", text: timeOf(e.ts) })),
       tbl,
-      el("div", { style: "font:11px/1.4 monospace;color:#8a8f98;word-break:break-all;margin-top:6px", text: "DIAQ mətn: " + diagCodes(e.text) + " | ad: " + diagCodes(who) }),
       actions);
   }
-  // Müvəqqəti diaqnostik: hərf/rəqəm olmayan simvolların kodları
-  function diagCodes(t) {
-    var a = Array.from(String(t || "")), out = [];
-    a.forEach(function (c) { if (!/[\p{L}\p{N}]/u.test(c)) out.push("U+" + c.codePointAt(0).toString(16).toUpperCase()); });
-    return a.length + " simvol; qeyri-hərf: " + (out.join(" ") || "yoxdur");
-  }
-
   // Konkret qeydi silmək: ilk basış təsdiq istəyir, ikinci basış silir.
   function delButton(e) {
     var timer = null;
@@ -1016,7 +1008,7 @@ details .col { margin-top: 12px; }
     return new Blob(parts.concat(central, [eocd]), { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   }
   function xesc(t) {
-    return String(t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F  ]/g, "")
+    return String(t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function colName(i) { var s = ""; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
@@ -1111,7 +1103,7 @@ details .col { margin-top: 12px; }
     var sstXml = hdr + '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + sstCount + '" uniqueCount="' + sstList.length + '">' +
       sstList.map(function (t) { return '<si><t' + (/\s/.test(t) ? ' xml:space="preserve"' : '') + '>' + xesc(t) + '</t></si>'; }).join("") + '</sst>';
     var now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
-    var core = hdr + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>v24.11-E</dc:title><dc:creator>Gündəlik qeyd</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + now + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + now + '</dcterms:modified></cp:coreProperties>';
+    var core = hdr + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>v24.11-F</dc:title><dc:creator>Gündəlik qeyd</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">' + now + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + now + '</dcterms:modified></cp:coreProperties>';
     var app = hdr + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Gundelik qeyd</Application><AppVersion>3.1</AppVersion></Properties>';
     var all = [
       { name: "[Content_Types].xml", data: enc.encode(ct) },
