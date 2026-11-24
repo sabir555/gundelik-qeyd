@@ -80,6 +80,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .btn { font: inherit; font-weight: 500; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .btn.small { padding: 6px 12px; font-size: 14px; }
+.btn.danger { background: #b3261e; border-color: #b3261e; color: #fff; }
 .btn[disabled] { opacity: .55; cursor: default; }
 label { font-size: 14px; font-weight: 500; display: block; margin-bottom: 4px; }
 textarea, input[type="date"], input[type="text"], input[type="password"], select {
@@ -106,7 +107,7 @@ textarea { resize: vertical; min-height: 110px; }
 .entry .who { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
 .entry .when { color: var(--muted); font-weight: 400; font-size: 13px; white-space: nowrap; }
 .entry .v { white-space: pre-wrap; overflow-wrap: anywhere; }
-.entry .actions { display: flex; justify-content: flex-end; }
+.entry .actions { display: flex; justify-content: flex-end; gap: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 13px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .chip.warn { color: var(--warn); border-color: var(--warn); }
@@ -278,7 +279,7 @@ details .col { margin-top: 12px; }
       <p class="sub">Parolların özü görünmür və heç yerdə saxlanmır. Yalnız hər istifadəçinin parolunun son dəfə nə vaxt təyin edildiyi göstərilir.</p>
       <div id="acc-list"></div>
     </div>
-    <div class="card" id="purge-card" hidden>
+    <div class="card" id="purge-card">
       <h2>Köhnə qeydləri sil</h2>
       <p class="sub">Seçdiyiniz müddətdən köhnə bütün qeydlər həmişəlik silinir. Əvvəlcə Excel endirməyi məsləhət görürük.</p>
       <div class="row">
@@ -295,6 +296,7 @@ details .col { margin-top: 12px; }
         <button class="btn primary" id="purge-go" type="button" hidden>Bəli, sil</button>
       </div>
       <span class="status" id="purge-status" role="status"></span>
+      <p class="sub" id="purge-noright" hidden>Bu hesabda silmək hüququ yoxdur. Google Sheet-də <b>Users</b> vərəqində bu istifadəçinin <b>hüquqlar</b> xanasına <b>,sil</b> əlavə edin (məs. <b>yaz,bax,sil</b>) və saytda çıxış edib yenidən daxil olun.</p>
     </div>
   </section>
 </div>
@@ -449,7 +451,10 @@ details .col { margin-top: 12px; }
     $("app").hidden = false;
     $("who").textContent = S.me.name;
     $("tabs").hidden = !canView();
-    $("purge-card").hidden = !(canView() && myRights().del);
+    var canDel = !!myRights().del;
+    ["purge-days", "purge-check"].forEach(function (id) { $(id).parentNode.hidden = !canDel; });
+    $("purge-check").hidden = !canDel;
+    $("purge-noright").hidden = canDel;
     purgeReset();
     purgeStatus("");
     $("admin-day").hidden = !canView();
@@ -496,11 +501,37 @@ details .col { margin-top: 12px; }
     S.dirty = false;
   }
 
+  // Konkret qeydi silmək: ilk basış təsdiq istəyir, ikinci basış silir.
+  function delButton(e) {
+    var timer = null;
+    var btn = el("button", { class: "btn small", type: "button", text: "Sil" });
+    var cancel = el("button", { class: "btn small", type: "button", text: "Ləğv et", hidden: "" });
+    function reset() { clearTimeout(timer); btn.textContent = "Sil"; btn.classList.remove("danger"); cancel.hidden = true; btn.disabled = false; }
+    cancel.addEventListener("click", reset);
+    btn.addEventListener("click", function () {
+      if (!cancel.hidden) {
+        clearTimeout(timer);
+        btn.disabled = true; cancel.hidden = true; btn.textContent = "Silinir…";
+        api("delentry", { date: e.date, username: e.username }).then(function (j) {
+          if (j && j.ok) refresh();
+          else { reset(); btn.textContent = j && j.error === "forbidden" ? "Hüquq yoxdur" : "Alınmadı"; setTimeout(reset, 2500); }
+        }).catch(function () { reset(); btn.textContent = "Qoşulmaq alınmadı"; setTimeout(reset, 2500); });
+        return;
+      }
+      btn.textContent = "Bəli, sil";
+      btn.classList.add("danger");
+      cancel.hidden = false;
+      timer = setTimeout(reset, 6000);
+    });
+    return el("div", { class: "actions" }, btn, cancel);
+  }
+
   function entryCard(e, withActions) {
     var card = el("div", { class: "entry" },
       el("div", { class: "who" }, el("span", { text: withActions ? longDate(e.date) + ", " + weekday(e.date) : nameOf(e.username) }), el("span", { class: "when", text: timeOf(e.ts) })),
       el("div", { class: "v", text: e.text })
     );
+    if (!withActions && myRights().del) card.append(delButton(e));
     if (withActions && myRights().edit) {
       card.append(el("div", { class: "actions" }, el("button", {
         class: "btn small", type: "button", text: "Redaktə et",
