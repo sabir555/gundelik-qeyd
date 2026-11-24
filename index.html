@@ -301,7 +301,6 @@ details .col { margin-top: 12px; }
   </section>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -826,21 +825,120 @@ details .col { margin-top: 12px; }
     else fail();
   }
 
+  /* ---------- Excel (.xlsx) faylı: kitabxanasız, öz quraşdırıcımızla ---------- */
+  var CRC_T = null;
+  function crc32(b) {
+    if (!CRC_T) {
+      CRC_T = [];
+      for (var n = 0; n < 256; n++) { var c0 = n; for (var k = 0; k < 8; k++) c0 = (c0 & 1) ? (0xEDB88320 ^ (c0 >>> 1)) : (c0 >>> 1); CRC_T[n] = c0 >>> 0; }
+    }
+    var c = 0xFFFFFFFF;
+    for (var i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zipStore(files) {
+    var enc = new TextEncoder();
+    function u16(n) { return [n & 255, (n >>> 8) & 255]; }
+    function u32(n) { return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; }
+    var parts = [], central = [], offset = 0;
+    files.forEach(function (f) {
+      var name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+      var lh = new Uint8Array([0x50, 0x4b, 3, 4].concat(u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(crc), u32(size), u32(size), u16(name.length), u16(0)));
+      parts.push(lh, name, f.data);
+      central.push(new Uint8Array([0x50, 0x4b, 1, 2].concat(u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(crc), u32(size), u32(size), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset))), name);
+      offset += lh.length + name.length + size;
+    });
+    var cdSize = 0;
+    central.forEach(function (c) { cdSize += c.length; });
+    var count = files.length;
+    var eocd = new Uint8Array([0x50, 0x4b, 5, 6].concat(u16(0), u16(0), u16(count), u16(count), u32(cdSize), u32(offset), u16(0)));
+    return new Blob(parts.concat(central, [eocd]), { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  }
+  function xesc(t) {
+    return String(t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F  ]/g, "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function colName(i) { var s = ""; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+  // Üslublar: 1 mətn (haşiyə, sətirə keçir), 2 qalın başlıq (mərkəzdə), 3 nömrə (solda), 4 qalın başlıq (solda), 5 mərkəzdə mətn
+  var XL_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+    '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' +
+    '<border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="6">' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' +
+    '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+
+  function sheetXml(sh) {
+    var x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<sheetFormatPr defaultRowHeight="15"/><cols>';
+    sh.cols.forEach(function (w, i) { x += '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; });
+    x += '</cols><sheetData>';
+    sh.rows.forEach(function (row, r) {
+      x += '<row r="' + (r + 1) + '">';
+      row.forEach(function (c, i) {
+        var ref = colName(i) + (r + 1);
+        if (typeof c.v === "number") x += '<c r="' + ref + '" s="' + c.s + '"><v>' + c.v + '</v></c>';
+        else if (c.v === "" || c.v == null) x += '<c r="' + ref + '" s="' + c.s + '"/>';
+        else x += '<c r="' + ref + '" s="' + c.s + '" t="inlineStr"><is><t xml:space="preserve">' + xesc(c.v) + '</t></is></c>';
+      });
+      x += '</row>';
+    });
+    return x + '</sheetData></worksheet>';
+  }
+  function buildXlsx(sheets) {
+    var enc = new TextEncoder(), hdr = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    var used = {};
+    sheets.forEach(function (sh) {
+      var n = sh.name.replace(/[\\\/?*\[\]:]/g, "-").slice(0, 31) || "Sheet", base = n, k = 2;
+      while (used[n.toLowerCase()]) { var suf = " (" + k++ + ")"; n = base.slice(0, 31 - suf.length) + suf; }
+      used[n.toLowerCase()] = true;
+      sh.safe = n;
+    });
+    var ct = hdr + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
+    var wb = hdr + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>';
+    var rels = hdr + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+    var files = [];
+    sheets.forEach(function (sh, i) {
+      var n = i + 1;
+      ct += '<Override PartName="/xl/worksheets/sheet' + n + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+      wb += '<sheet name="' + xesc(sh.safe) + '" sheetId="' + n + '" r:id="rId' + n + '"/>';
+      rels += '<Relationship Id="rId' + n + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + n + '.xml"/>';
+      files.push({ name: "xl/worksheets/sheet" + n + ".xml", data: enc.encode(sheetXml(sh)) });
+    });
+    ct += '</Types>';
+    wb += '</sheets></workbook>';
+    rels += '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+    var root = hdr + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+    var all = [
+      { name: "[Content_Types].xml", data: enc.encode(ct) },
+      { name: "_rels/.rels", data: enc.encode(root) },
+      { name: "xl/workbook.xml", data: enc.encode(wb) },
+      { name: "xl/_rels/workbook.xml.rels", data: enc.encode(rels) },
+      { name: "xl/styles.xml", data: enc.encode(XL_STYLES) }
+    ].concat(files);
+    return zipStore(all);
+  }
+
   function downloadXlsx() {
     var st = $("rep-status");
     st.className = "status";
-    if (!window.XLSX) { st.className = "status err"; st.textContent = "Excel kitabxanası yüklənmədi. Səhifəni yeniləyin."; return; }
     var days = rangeDays();
-    var wb = XLSX.utils.book_new();
+    var sheets = [];
 
-    // Hər gün ayrıca sheet (dd.mm.yyyy): № | tarix | Kurator. Nömrələr gün boyu davam edir, Kurator sütununda yazan işçinin adı.
-    var anyEntry = false;
-    days.forEach(function (d) {
+    // Hər gün ayrıca sheet (dd.mm.yyyy): № | tarix | Kurator. Nömrələr gün boyu davam edir.
+        days.forEach(function (d) {
       var list = S.entries.filter(function (e) { return e.date === d; })
         .sort(function (a, b) { return nameOf(a.username).localeCompare(nameOf(b.username)); });
       if (!list.length) return;
-      anyEntry = true;
-      var aoa = [["№", dotDate(d), "Kurator"]];
+      var rows = [[{ v: "№", s: 2 }, { v: dotDate(d), s: 2 }, { v: "Kurator", s: 2 }]];
       var n = 0;
       list.forEach(function (e) {
         var who = nameOf(e.username);
@@ -848,39 +946,47 @@ details .col { margin-top: 12px; }
           .map(function (x) { return x.replace(/^\s*(?:\d+[.)]|[-•*])\s*/, "").trim(); })
           .filter(function (x) { return x; });
         if (!items.length) items = [""];
-        items.forEach(function (t) { n++; aoa.push([n, t, who]); });
+        items.forEach(function (t) { n++; rows.push([{ v: n, s: 3 }, { v: t, s: 1 }, { v: who, s: 1 }]); });
       });
-      var ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!cols"] = [{ wch: 5 }, { wch: 90 }, { wch: 26 }];
-      XLSX.utils.book_append_sheet(wb, ws, dotDate(d));
+      // Mətn sətirə keçmir: yalnız saytda Enter basılan yerdə yeni sətir olur. Sütun ən uzun mətnə görə genişlənir (Excel-in həddi 255).
+      var longest = 0;
+      rows.slice(1).forEach(function (r) { longest = Math.max(longest, String(r[1].v).length); });
+      var wText = Math.min(255, Math.max(30, Math.ceil(longest * 1.1) + 2));
+      var wName = Math.min(60, Math.max(14, rows.slice(1).reduce(function (m, r) { return Math.max(m, String(r[2].v).length); }, 0) + 3));
+      sheets.push({ name: dotDate(d), cols: [5, wText, wName], rows: rows });
     });
-    if (!anyEntry) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Seçilmiş müddətdə qeyd yoxdur."]]), "Qeyd yoxdur");
+    if (!sheets.length) sheets.push({ name: "Qeyd yoxdur", cols: [40], rows: [[{ v: "Seçilmiş müddətdə qeyd yoxdur.", s: 1 }]] });
 
-    var grid = [["İşçi"].concat(days.map(function (d) { return shortDate(d); }), ["Cəmi"])];
+    var grid = [[{ v: "İşçi", s: 4 }].concat(days.map(function (d) { return { v: shortDate(d), s: 2 }; }), [{ v: "Cəmi", s: 2 }])];
     writersInRange(days).forEach(function (u) {
       var n = 0;
-      var line = [nameOf(u)];
-      days.forEach(function (d) { var h = !!entryOf(u, d); if (h) n++; line.push(h ? "+" : ""); });
-      line.push(n);
+      var line = [{ v: nameOf(u), s: 1 }];
+      days.forEach(function (d) { var h = !!entryOf(u, d); if (h) n++; line.push({ v: h ? "+" : "", s: 5 }); });
+      line.push({ v: n, s: 5 });
       grid.push(line);
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(grid), "Cədvəl");
+    sheets.push({ name: "Cədvəl", cols: [28].concat(days.map(function () { return 7; }), [8]), rows: grid });
 
-    var abs = [["Tarix", "İşçi"]];
+    var abs = [[{ v: "Tarix", s: 4 }, { v: "İşçi", s: 4 }]];
     days.slice().reverse().forEach(function (d) {
-      missingOn(d).forEach(function (u) { abs.push([dotDate(d), u.name]); });
+      missingOn(d).forEach(function (u) { abs.push([{ v: dotDate(d), s: 1 }, { v: u.name, s: 1 }]); });
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abs), "Yazmayanlar");
+    sheets.push({ name: "Yazmayanlar", cols: [14, 30], rows: abs });
 
     try {
-      XLSX.writeFile(wb, "gundelik-is-" + todayKey() + ".xlsx");
+      var blob = buildXlsx(sheets);
+      var url = URL.createObjectURL(blob);
+      var a = el("a", { href: url, download: "gundelik-is-" + todayKey() + ".xlsx" });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
       st.textContent = "Excel faylı hazırlandı.";
     } catch (e) {
       st.className = "status err";
       st.textContent = "Fayl yaradıla bilmədi.";
     }
   }
-
   /* ---------- Parol xanalarında göz işarəsi ---------- */
   function svgEl(paths) {
     var ns = "http://www.w3.org/2000/svg";
